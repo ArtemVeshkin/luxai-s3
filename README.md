@@ -1,0 +1,63 @@
+# Важные ссылки
+
+Сорева: https://www.kaggle.com/competitions/lux-ai-season-3/
+
+Online Visualizer: https://s3vis.lux-ai.org/
+
+Доки: https://github.com/Lux-AI-Challenge/Lux-Design-S3/blob/main/docs/specs.md
+
+Github: https://github.com/Lux-AI-Challenge/Lux-Design-S3
+
+# Quick start
+
+```bash
+conda create -n "lux-s3" "python==3.11"
+git clone https://github.com/ArtemVeshkin/luxai-s3.git
+pip install -e luxai-s3/Lux-Design-S3/src
+```
+
+Проверяем, что всё поставилось: `luxai-s3 -h`
+
+# Структура проекта
+
+* `agents` - папка с агентами
+* `Lux-Design-S3` - клон официального репозитория
+* `scripts` - скрипты для тестирования агентов/подготовки сабмита/...
+
+## agents
+
+Агентов кладем в папку agents: `/agents/<имя агента>/`.
+
+Папка должна содержать файл `agent.py`. В нем должен лежать класс `Agent`, реализующий метод `act`:
+
+```python
+def act(self, step: int, obs, remainingOverageTime: int = 60):
+  # agent logic
+  return actions 
+```
+
+`actions` - массив размера (макс число юнитов, 3)
+
+## scripts
+
+Содержит всякие полезные shell-скрипты.
+
+Перед запуском установите переменную окружения LUXAI_ROOT_PATH:
+
+`export LUXAI_ROOT_PATH=<path to project>`
+
+Например:
+
+`export LUXAI_ROOT_PATH=/home/artemveshkin/dev/luxai-s3`
+
+### run.sh
+
+Запускает 2 агентов друг против друга
+
+Пример запуска: `sh scripts/run.sh baseline baseline`
+
+### submit.sh
+
+Готовит архив для сабмита `submit.tar.gz`
+
+Пример запуска: `sh scripts/submit.sh baseline`
