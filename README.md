@@ -20,6 +20,8 @@ pip install -e Lux-Design-S3/src
 
 Проверяем, что всё поставилось: `luxai-s3 -h`
 
+Если `gymnax` не ставится: `pip install git+https://github.com/RobertTLange/gymnax.git@main`
+
 # Структура проекта
 
 * `agents` - папка с агентами
