@@ -18,8 +18,8 @@ else
         SCRIPT_WORK_DIR="$LUXAI_ROOT_PATH/runs/$1_vs_$2"
         KIT_PATH="Lux-Design-S3/kits/python"
 
-        AGENT_1_PATH="$SCRIPT_WORK_DIR/agent_1"
-        AGENT_2_PATH="$SCRIPT_WORK_DIR/agent_2"
+        AGENT_1_PATH="$SCRIPT_WORK_DIR/$1"
+        AGENT_2_PATH="$SCRIPT_WORK_DIR/$2"
 
         rm -rf $SCRIPT_WORK_DIR && mkdir -p $SCRIPT_WORK_DIR
         mkdir $AGENT_1_PATH && cp -r "$LUXAI_ROOT_PATH/agents/$1/." $AGENT_1_PATH
