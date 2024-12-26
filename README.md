@@ -11,7 +11,7 @@ Github: https://github.com/Lux-AI-Challenge/Lux-Design-S3
 # Quick start
 
 ```bash
-conda create -n "lux-s3" "python==3.11"
+conda create -n "lux-s3" python==3.11
 conda activate lux-s3
 git clone git@github.com:ArtemVeshkin/luxai-s3.git
 cd luxai-s3
