@@ -1,6 +1,7 @@
 # Custom
 submit.tar.gz
 runs/
+eval_results/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
