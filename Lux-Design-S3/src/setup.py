@@ -8,6 +8,7 @@ setup(
         "jax",
         "gymnax==0.0.8",
         "tyro",
+        "statsmodels"
     ],
     entry_points={"console_scripts": ["luxai-s3 = luxai_runner.cli:main"]},
     author="Lux AI Challenge",

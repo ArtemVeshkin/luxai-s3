@@ -20,8 +20,10 @@ import tabulate
 class Args:
     agent: str = "baseline"
     """Agent name"""
-    n_runs: int = 10
+    n_runs: int = 100
     """How much matches to play"""
+    run_matches: bool = True
+    """Run matches or only calculate metrics"""
 
 def main():
     args = tyro.cli(Args)
@@ -34,20 +36,21 @@ def main():
     SCRIPT_DIR = LUXAI_ROOT_PATH / 'runs' / agent_name
     AGENT_DIR = LUXAI_ROOT_PATH / 'agents'/ agent_name
     prepare_agent_folder(SCRIPT_DIR, AGENT_DIR)
-    os.makedirs(SCRIPT_DIR / 'runs')
 
-    # run matches
-    print("Running matches")
-    for run_idx in tqdm(range(args.n_runs)):
-        p = subprocess.Popen((
-            'luxai-s3',
-            SCRIPT_DIR / "main.py",
-            SCRIPT_DIR / "main.py",
-            f'--seed={run_idx}',
-            f'--output={SCRIPT_DIR / "runs" / (str(run_idx) + ".json")}'
-        ))
-        p.wait()
-        time.sleep(0.1)
+    if args.run_matches:
+        # run matches
+        print("Running matches")
+        clear_and_create_dir(SCRIPT_DIR / 'runs')
+        for run_idx in tqdm(range(args.n_runs)):
+            p = subprocess.Popen((
+                'luxai-s3',
+                SCRIPT_DIR / "main.py",
+                SCRIPT_DIR / "main.py",
+                f'--seed={run_idx}',
+                f'--output={SCRIPT_DIR / "runs" / (str(run_idx) + ".json")}'
+            ))
+            p.wait()
+            time.sleep(0.2)
 
     # calc metrics
     print("Calculating metrics")
