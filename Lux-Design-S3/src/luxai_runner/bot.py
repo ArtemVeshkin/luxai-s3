@@ -47,8 +47,11 @@ class Bot:
         self.remainingOverageTime = 600
         self.time_per_step = 9
 
+        # self.log = Logger(
+        #     identifier=f"{self.agent}, {self.main_file_path}", verbosity=verbose
+        # )
         self.log = Logger(
-            identifier=f"{self.agent}, {self.main_file_path}", verbosity=verbose
+            identifier=f"{self.agent}", verbosity=verbose
         )
 
     async def step(self, obs, step: int, reward: float = 0, info=dict()):

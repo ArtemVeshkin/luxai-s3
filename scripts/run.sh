@@ -32,6 +32,6 @@ else
         cp -rp "$LUXAI_ROOT_PATH/$KIT_PATH/lux" $AGENT_2_PATH
 
         luxai-s3 "$AGENT_1_PATH/main.py" "$AGENT_2_PATH/main.py" \
-            --output="$SCRIPT_WORK_DIR/replay.html" --seed=1
+            --output="$SCRIPT_WORK_DIR/replay.html" --seed=2
     fi
 fi
