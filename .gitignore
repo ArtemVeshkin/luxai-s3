@@ -3,6 +3,7 @@ submit.tar.gz
 runs/
 eval_results/
 compare_results/
+energy_logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

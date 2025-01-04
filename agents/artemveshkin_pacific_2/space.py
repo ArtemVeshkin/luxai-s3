@@ -231,6 +231,12 @@ class Space:
                 for node in self:
                     node.type = NodeType.unknown
 
+        # The energy field has changed
+        # I cannot predict what the new energy field will be like.
+        if energy_nodes_shifted:
+            for node in self:
+                node.energy = None
+
         for node in self:
             x, y = node.coordinates
             is_visible = bool(sensor_mask[x, y])
@@ -250,10 +256,6 @@ class Space:
                 # the energy field should be symmetrical
                 self.get_node(*get_opposite(x, y)).energy = node.energy
 
-            elif energy_nodes_shifted:
-                # The energy field has changed
-                # I cannot predict what the new energy field will be like.
-                node.energy = None
 
     @staticmethod
     def _find_obstacle_movement_period(obstacles_movement_status):
