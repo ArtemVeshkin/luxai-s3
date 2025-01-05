@@ -1,3 +1,6 @@
+import numpy as np
+
+
 class Global:
 
     # Game related constants:
@@ -44,6 +47,8 @@ class Global:
     OBSTACLES_MOVEMENT_STATUS = []
 
     # Others:
+
+    PREV_ENERGY_FIELDS = [np.zeros((SPACE_SIZE, SPACE_SIZE, 2))] * 3
 
     # The energy on the unknown tiles will be used in the pathfinding
     HIDDEN_NODE_ENERGY = 0

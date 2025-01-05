@@ -42,6 +42,18 @@ class Space:
     def get_node(self, x, y) -> Node:
         return self._nodes[y][x]
 
+    def get_energy_field(self):
+        space_size = Global.SPACE_SIZE
+        energy_field = np.zeros((space_size, space_size, 2))
+        for y in range(space_size):
+            for x in range(space_size):
+                node: Node = self.get_node(x, y)
+                if node.energy is None:
+                    energy_field[x, y, :] = (0., 0)
+                else:
+                    energy_field[x, y, :] = (node.energy, 1)
+        return energy_field
+
     def update(self, step, obs, team_id, team_reward):
         self.move_obstacles(step)
         self._update_map(obs)
@@ -234,6 +246,8 @@ class Space:
         # The energy field has changed
         # I cannot predict what the new energy field will be like.
         if energy_nodes_shifted:
+            Global.PREV_ENERGY_FIELDS.append(self.get_energy_field())
+
             for node in self:
                 node.energy = None
 
@@ -255,7 +269,6 @@ class Space:
 
                 # the energy field should be symmetrical
                 self.get_node(*get_opposite(x, y)).energy = node.energy
-
 
     @staticmethod
     def _find_obstacle_movement_period(obstacles_movement_status):

@@ -345,14 +345,4 @@ class Agent:
         show_exploration_map(self.space)
 
     def update_energy_fields(self):
-        space_size = Global.SPACE_SIZE
-        cur_energy_field = np.zeros((space_size, space_size, 2))
-        for y in range(space_size):
-            for x in range(space_size):
-                node: Node = self.space.get_node(x, y)
-                if node.energy is None:
-                    cur_energy_field[x, y, :] = (0., 0)
-                else:
-                    cur_energy_field[x, y, :] = (node.energy, 1)
-
-        self.energy_fields.append(cur_energy_field)
+        self.energy_fields.append(self.space.get_energy_field())
