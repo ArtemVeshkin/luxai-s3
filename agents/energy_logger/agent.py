@@ -47,6 +47,7 @@ class Agent:
         self.opp_fleet = Fleet(self.opp_team_id)
 
         self.energy_fields = []
+        self.prev_energy_fields = []
 
 
     def act(self, step: int, obs, remainingOverageTime: int = 60):
@@ -76,9 +77,14 @@ class Agent:
 
         if step == 504:
             self.energy_fields = np.array(self.energy_fields)
+            self.prev_energy_fields = np.array(self.prev_energy_fields)
+
             luxai_dir = Path(os.environ['LUXAI_ROOT_PATH'])
-            with open(luxai_dir / 'energy_logs' / f'{self.player}.npy', 'wb') as fh:
+            with open(luxai_dir / 'energy_logs' / f'{self.player}_energy_fields.npy', 'wb') as fh:
                 np.save(fh, self.energy_fields)
+
+            with open(luxai_dir / 'energy_logs' / f'{self.player}_prev_energy_fields.npy', 'wb') as fh:
+                np.save(fh, self.prev_energy_fields)
 
         # self.show_visible_map()
 
@@ -346,3 +352,4 @@ class Agent:
 
     def update_energy_fields(self):
         self.energy_fields.append(self.space.get_energy_field())
+        self.prev_energy_fields.append(np.array(Global.PREV_ENERGY_FIELDS[-3:]))
