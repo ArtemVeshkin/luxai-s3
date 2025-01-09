@@ -152,3 +152,22 @@ def path_to_actions(path):
         last_position = (x, y)
 
     return actions
+
+
+def find_closest_astar_target(start, targets, space, ship_energy):
+    target_to_distance_and_energy = {}
+    for t in targets:
+        path = astar(create_weights(space), start, t)
+        energy = estimate_energy_cost(space, path)
+        actions = path_to_actions(path)
+        if actions and ship_energy >= energy:
+            target_to_distance_and_energy[t] = (
+                len(actions),
+                energy
+            )
+
+    if len(target_to_distance_and_energy) == 0:
+        return None
+    
+    return sorted(target_to_distance_and_energy.items(), key=lambda item: item[1])[0][0]
+    

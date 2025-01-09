@@ -18,6 +18,7 @@ from pathfinding import (
     estimate_energy_cost,
     path_to_actions,
     manhattan_distance,
+    find_closest_astar_target
 )
 from debug import (
     show_map,
@@ -112,7 +113,9 @@ class Agent:
             if ship.energy < Global.UNIT_MOVE_COST:
                 return False
 
-            target, _ = find_closest_target(ship.coordinates, targets)
+            # target, _ = find_closest_target(ship.coordinates, targets)
+            target = find_closest_astar_target(ship.coordinates, targets, self.space, ship.energy)
+
             if not target:
                 return False
 
@@ -195,16 +198,27 @@ class Agent:
                 if not node.explored_for_reward and node.is_walkable:
                     targets.append((x, y))
 
-            target, _ = find_closest_target(ship.coordinates, targets)
+            # target, _ = find_closest_target(ship.coordinates, targets)
+            target = find_closest_astar_target(ship.coordinates, targets, self.space, ship.energy)
 
             if target == ship.coordinates and not can_pause:
-                target, _ = find_closest_target(
+                # target, _ = find_closest_target(
+                #     ship.coordinates,
+                #     [
+                #         n.coordinates
+                #         for n in self.space
+                #         if n.explored_for_reward and n.is_walkable
+                #     ],
+                # )
+                target = find_closest_astar_target(
                     ship.coordinates,
                     [
                         n.coordinates
                         for n in self.space
                         if n.explored_for_reward and n.is_walkable
                     ],
+                    self.space,
+                    ship.energy
                 )
 
             if not target:
@@ -304,7 +318,8 @@ class Agent:
             if ship.task:
                 continue
 
-            target, _ = find_closest_target(ship.coordinates, targets)
+            # target, _ = find_closest_target(ship.coordinates, targets)
+            target = find_closest_astar_target(ship.coordinates, targets, self.space, ship.energy)
 
             if target and set_task(ship, self.space.get_node(*target)):
                 targets.remove(target)
