@@ -5,6 +5,9 @@ eval_results/
 compare_results/
 energy_logs/
 *.DS_Store
+models/energy_predictor/exps/
+models/energy_predictor/tb_logs/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
