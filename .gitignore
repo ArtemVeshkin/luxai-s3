@@ -4,6 +4,7 @@ runs/
 eval_results/
 compare_results/
 energy_logs/
+*.DS_Store
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
