@@ -25,6 +25,7 @@ from pathfinding import (
     estimate_energy_cost,
     path_to_actions,
     manhattan_distance,
+    find_closest_astar_target
 )
 from energy_predictor import EnergyPredictor
 
@@ -572,17 +573,25 @@ class Agent:
         for ship in self.fleet:
             if ship.task is not None or ship.target is not None:
                 continue
-            relic_coordinates, _ = find_closest_target(ship.node.coordinates,
-                                             [relic.coordinates for relic in unexplored_relics])
+            # relic_coordinates, _ = find_closest_target(ship.node.coordinates,
+            #                                  [relic.coordinates for relic in unexplored_relics])
+            relic_coordinates = find_closest_astar_target(
+                ship.node.coordinates,
+                [relic.coordinates for relic in unexplored_relics],
+                self.space,
+                ship.energy
+            )
             targets = []
-            for x, y in nearby_positions(*relic_coordinates, Global.RELIC_REWARD_RANGE):
-                node = self.space.get_node(x, y)
-                if not node.explored_for_reward and node.is_walkable:
-                    targets.append((x, y))
-            target, _ = find_closest_target(ship.coordinates, targets)
+            if relic_coordinates:
+                for x, y in nearby_positions(*relic_coordinates, Global.RELIC_REWARD_RANGE):
+                    node = self.space.get_node(x, y)
+                    if not node.explored_for_reward and node.is_walkable:
+                        targets.append((x, y))
+            # target, _ = find_closest_target(ship.coordinates, targets)
+            target = find_closest_astar_target(ship.coordinates, targets, self.space, ship.energy)
             if not target:
                 return
-            path = astar(create_weights(self.space), ship.coordinates, target)
+            path = astar(create_weights(self.space, ship.energy), ship.coordinates, target)
             energy = estimate_energy_cost(self.space, path)
             actions = path_to_actions(path)
             if actions and ship.energy >= energy:
@@ -593,15 +602,22 @@ class Agent:
         for ship in self.fleet:
             if ship.task is not None or ship.target is not None:
                 continue
-            target, _ = find_closest_target(ship.node.coordinates,
-                                            [rew.coordinates for rew in self.space.reward_nodes
-                                                if rew.is_walkable and rew.coordinates not in ship_coords])
+            # target, _ = find_closest_target(ship.node.coordinates,
+            #                                 [rew.coordinates for rew in self.space.reward_nodes
+            #                                     if rew.is_walkable and rew.coordinates not in ship_coords])
+            target = find_closest_astar_target(
+                ship.node.coordinates,
+                [rew.coordinates for rew in self.space.reward_nodes
+                                                if rew.is_walkable and rew.coordinates not in ship_coords],
+                self.space,
+                ship.energy
+            )
             if not target:
                 return
-            path = astar(create_weights(self.space), ship.coordinates, target)
+            path = astar(create_weights(self.space, ship.energy), ship.coordinates, target)
             energy = estimate_energy_cost(self.space, path)
             actions = path_to_actions(path)
-            if actions and ship.energy >= energy:
+            if actions and ship.energy > energy:
                 ship.task = "harvest"
                 ship.target = self.space.get_node(*target)
                 ship.action = actions[0]
@@ -629,11 +645,12 @@ class Agent:
             if ship.energy < Global.UNIT_MOVE_COST:
                 return False
 
-            target, _ = find_closest_target(ship.coordinates, targets)
+            # target, _ = find_closest_target(ship.coordinates, targets)
+            target = find_closest_astar_target(ship.coordinates, targets, self.space, ship.energy)
             if not target:
                 return False
 
-            path = astar(create_weights(self.space), ship.coordinates, target)
+            path = astar(create_weights(self.space, ship.energy), ship.coordinates, target)
             energy = estimate_energy_cost(self.space, path)
             actions = path_to_actions(path)
             if actions and ship.energy >= energy:
@@ -712,22 +729,33 @@ class Agent:
                 if not node.explored_for_reward and node.is_walkable:
                     targets.append((x, y))
 
-            target, _ = find_closest_target(ship.coordinates, targets)
+            # target, _ = find_closest_target(ship.coordinates, targets)
+            target = find_closest_astar_target(ship.coordinates, targets, self.space, ship.energy)
 
             if target == ship.coordinates and not can_pause:
-                target, _ = find_closest_target(
+                target = find_closest_astar_target(
                     ship.coordinates,
-                    [
+                   [
                         n.coordinates
                         for n in self.space
                         if n.explored_for_reward and n.is_walkable
                     ],
+                    self.space,
+                    ship.energy
                 )
+                # target, _ = find_closest_target(
+                #     ship.coordinates,
+                #     [
+                #         n.coordinates
+                #         for n in self.space
+                #         if n.explored_for_reward and n.is_walkable
+                #     ],
+                # )
 
             if not target:
                 return
 
-            path = astar(create_weights(self.space), ship.coordinates, target)
+            path = astar(create_weights(self.space, ship.energy), ship.coordinates, target)
             energy = estimate_energy_cost(self.space, path)
             actions = path_to_actions(path)
 
@@ -775,6 +803,9 @@ class Agent:
     def harvest(self):
 
         def set_task(ship, target_node):
+            if ship.energy == 0:
+                return False
+
             if ship.node == target_node:
                 ship.task = "harvest"
                 ship.target = target_node
@@ -782,14 +813,14 @@ class Agent:
                 return True
 
             path = astar(
-                create_weights(self.space),
+                create_weights(self.space, ship.energy),
                 start=ship.coordinates,
                 goal=target_node.coordinates,
             )
             energy = estimate_energy_cost(self.space, path)
             actions = path_to_actions(path)
 
-            if not actions or ship.energy < energy:
+            if not actions or ship.energy <= energy:
                 return False
 
             ship.task = "harvest"
@@ -799,6 +830,10 @@ class Agent:
 
         booked_nodes = set()
         for ship in self.fleet:
+            if ship.energy == 0:
+                ship.task = None
+                continue
+
             if ship.task == "harvest":
                 if ship.target is None:
                     ship.task = None
@@ -821,7 +856,8 @@ class Agent:
             if ship.task:
                 continue
 
-            target, _ = find_closest_target(ship.coordinates, targets)
+            target = find_closest_astar_target(ship.coordinates, targets, self.space, ship.energy)
+            # target, _ = find_closest_target(ship.coordinates, targets)
 
             if target and set_task(ship, self.space.get_node(*target)):
                 targets.remove(target)

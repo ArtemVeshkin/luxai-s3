@@ -83,7 +83,9 @@ def nearby_positions(x, y, distance):
             yield x_, y_
 
 
-def create_weights(space):
+def create_weights(space, ship_energy):
+    positive_energy_rescale = 1.0 if ship_energy > 30 else 2.0
+    nebula_rescale = 1.0 if ship_energy > 50 else 1.5
     # create weights for AStar algorithm
 
     weights = np.zeros((SPACE_SIZE, SPACE_SIZE), np.float32)
@@ -96,13 +98,14 @@ def create_weights(space):
             if node_energy is None:
                 node_energy = Global.HIDDEN_NODE_ENERGY
 
+            node_energy = node_energy if node_energy <= 0 else node_energy * positive_energy_rescale
+
             # pathfinding can't deal with negative weight
-            energy_weight = 0.5
-            weight = energy_weight * Global.MAX_ENERGY_PER_TILE + 1 - energy_weight * node_energy + (1 if node.visited_times > 0 and not Global.ALL_REWARDS_FOUND else 0)
+            weight = positive_energy_rescale * Global.MAX_ENERGY_PER_TILE + 1 - node_energy + (1 if node.visited_times > 0 and not Global.ALL_REWARDS_FOUND else 0)
             #todo: uchest' uvelichenie seen nodes
 
         if node.type == NodeType.nebula:
-            weight += Global.NEBULA_ENERGY_REDUCTION
+            weight += nebula_rescale * Global.NEBULA_ENERGY_REDUCTION
 
         weights[node.y][node.x] = weight
 
@@ -153,3 +156,21 @@ def path_to_actions(path):
         last_position = (x, y)
 
     return actions
+
+
+def find_closest_astar_target(start, targets, space, ship_energy):
+    target_to_distance_and_energy = {}
+    for t in targets:
+        path = astar(create_weights(space, ship_energy), start, t)
+        energy = estimate_energy_cost(space, path)
+        actions = path_to_actions(path)
+        if actions and ship_energy >= energy:
+            target_to_distance_and_energy[t] = (
+                len(actions),
+                energy
+            )
+
+    if len(target_to_distance_and_energy) == 0:
+        return None
+
+    return sorted(target_to_distance_and_energy.items(), key=lambda item: item[1])[0][0]
