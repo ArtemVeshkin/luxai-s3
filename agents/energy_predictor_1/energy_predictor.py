@@ -50,4 +50,4 @@ class EnergyPredictor:
 
         for node in space:
             x, y = node.coordinates
-            node.predicted_energy = node.energy if node.energy is not None else predicted_energy[x, y]
+            node.predicted_energy = node.energy if node.energy is not None else int(predicted_energy[x, y])
