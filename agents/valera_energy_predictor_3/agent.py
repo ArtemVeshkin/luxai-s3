@@ -775,9 +775,6 @@ class Agent:
     def harvest(self):
 
         def set_task(ship, target_node):
-            if ship.energy == 0:
-                return False
-
             if ship.node == target_node:
                 ship.task = "harvest"
                 ship.target = target_node
@@ -803,10 +800,6 @@ class Agent:
         booked_nodes = set()
         for ship in self.fleet:
             if ship.task == "harvest":
-                if ship.energy == 0:
-                    ship.task = None
-                    continue
-
                 if ship.target is None:
                     ship.task = None
                     continue
