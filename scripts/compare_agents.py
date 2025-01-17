@@ -14,7 +14,6 @@ from pathlib import Path
 from tqdm.auto import tqdm
 import random
 import subprocess
-import time
 import json
 import tabulate
 from scipy.stats import mannwhitneyu
@@ -51,17 +50,27 @@ def main():
         # run matches
         print("Running matches")
         clear_and_create_dir(SCRIPT_DIR / 'runs')
+        cur_won_matches = 0
         for run_idx in tqdm(range(args.n_runs)):
             change_agents_order = random.choice((True, False))
-            p = subprocess.Popen((
+            subprocess.run((
                 'luxai-s3',
                 SCRIPT_DIR / (agent2_name if change_agents_order else agent1_name) / "main.py",
                 SCRIPT_DIR / (agent1_name if change_agents_order else agent2_name) / "main.py",
                 f'--seed={run_idx}',
                 f'--output={SCRIPT_DIR / "runs" / (str(run_idx) + ".json")}'
             ))
-            p.wait()
-            time.sleep(0.2)
+
+            with open(SCRIPT_DIR / 'runs' / f'{run_idx}.json', 'r') as fh:
+                game_results_json = json.load(fh)
+                team_wins = game_results_json['observations'][505]['team_wins']
+                player_0 = game_results_json['metadata']['players']['player_0'].split('/')[-2]
+                if not (player_0 == agent1_name):
+                    team_wins = team_wins[::-1]
+                if team_wins[1] > team_wins[0]:
+                    cur_won_matches += 1
+            
+            print(f'Cur winrate = {100 * cur_won_matches / (run_idx + 1):.1f}%')
 
     # calc metrics
     print("Calculating metrics")
