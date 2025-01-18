@@ -551,8 +551,7 @@ class Agent:
         self.fight()
         self.employ_unemployed()
 
-        remaining_steps_to_panic = 50 if self.game_num >= 1 else 30
-        self.harvest_if_losing(points, opp_points, remaining_steps_to_panic)
+        self.harvest_if_losing(points, opp_points)
 
         # self.show_explored_energy_field()
         # if step >= 405 and step <= 430:
@@ -840,64 +839,6 @@ class Agent:
                 ship.target = None
 
 
-    def old_harvest(self):
-
-        def set_task(ship, target_node):
-            if ship.node == target_node:
-                ship.task = "harvest"
-                ship.target = target_node
-                ship.action = ActionType.center
-                return True
-
-            path = astar(
-                create_weights(self.space),
-                start=ship.coordinates,
-                goal=target_node.coordinates,
-            )
-            energy = estimate_energy_cost(self.space, path)
-            actions = path_to_actions(path)
-
-            if not actions or ship.energy < energy:
-                return False
-
-            ship.task = "harvest"
-            ship.target = target_node
-            ship.action = actions[0]
-            return True
-
-        booked_nodes = set()
-        for ship in self.fleet:
-            if ship.task == "harvest":
-                if ship.target is None:
-                    ship.task = None
-                    continue
-
-                if set_task(ship, ship.target):
-                    booked_nodes.add(ship.target)
-                else:
-                    ship.task = None
-                    ship.target = None
-
-        targets = set()
-        for n in self.space.reward_nodes:
-            if n.is_walkable and n not in booked_nodes:
-                targets.add(n.coordinates)
-        if not targets:
-            return
-
-        for ship in self.fleet:
-            if ship.task:
-                continue
-
-            target, _ = find_closest_target(ship.coordinates, targets)
-
-            if target and set_task(ship, self.space.get_node(*target)):
-                targets.remove(target)
-            else:
-                ship.task = None
-                ship.target = None
-
-
     def _get_ships_centroid(self, ship_indices):
         ships_centroid_pos = np.array([0, 0])
         for ship_idx in ship_indices:
@@ -1001,10 +942,8 @@ class Agent:
                 remaining_ship_indices.remove(best_ship_idx)
 
 
-    def harvest_if_losing(self, points, opp_points, remaining_steps_to_panic=50):
+    def harvest_if_losing(self, points, opp_points):
         remaining_steps = Global.MAX_STEPS_IN_MATCH - self.match_step
-        if remaining_steps >= remaining_steps_to_panic:
-            return
 
         reward = max(0, points - self.fleet.points)
         opp_reward = max(0, points - self.fleet.points)
@@ -1012,8 +951,10 @@ class Agent:
         predicted_points = points + remaining_steps * reward
         opp_predicted_points = opp_points + remaining_steps * opp_reward
 
-        if opp_predicted_points > predicted_points:
+        if opp_predicted_points > predicted_points and remaining_steps > 0:
             # HARVEST AS FAST AS YOU CAN!!!
+
+            missing_harvesters = int((opp_predicted_points - predicted_points) / remaining_steps) + 1
 
             space_weights = create_weights(self.space)
             booked_nodes = set()
@@ -1027,6 +968,7 @@ class Agent:
             )
 
             sorted_reward_nodes = self._get_sorter_rewards(space_weights, remaining_ship_indices)
+            new_harvesters = []
             for reward_node in sorted_reward_nodes:
                 if reward_node in booked_nodes:
                     continue
@@ -1048,13 +990,18 @@ class Agent:
                                 best_ship_idx = ship_idx
 
                 if best_ship_idx is not None:
-                    best_ship = self.fleet.ships[best_ship_idx]
-                    best_ship.target = reward_node
-                    best_ship.task = "harvest"
-                    best_ship.action = ship_actions[best_ship_idx]
+                    new_harvesters.append({
+                        'ship': self.fleet.ships[best_ship_idx],
+                        'target': reward_node,
+                        'action': ship_actions[best_ship_idx]
+                    })
                     remaining_ship_indices.remove(best_ship_idx)
-        
 
+            if len(new_harvesters) >= missing_harvesters:
+                for new_harvester in new_harvesters[:missing_harvesters]:
+                    new_harvester['ship'].target = new_harvester['target']
+                    new_harvester['ship'].task = "harvest"
+                    new_harvester['ship'].action = new_harvester['action']
 
     def fight(self):
         def find_best_target(ship, targets):
