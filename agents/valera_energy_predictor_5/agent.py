@@ -487,6 +487,12 @@ class Fleet:
         ):
             if active:
                 ship.node = space.get_node(*position)
+                if ship.node.type == NodeType.nebula and not Global.NEBULA_ENERGY_REDUCTION_FOUND:
+                    if ship.node.energy is not None:
+                        nebula_energy_reduction = ship.energy + ship.node.energy - Global.UNIT_MOVE_COST - int(energy)
+                        if nebula_energy_reduction in (0, 10, 25):
+                            Global.NEBULA_ENERGY_REDUCTION_FOUND = True
+                            Global.NEBULA_ENERGY_REDUCTION = nebula_energy_reduction
                 ship.energy = int(energy)
                 ship.action = None
             else:

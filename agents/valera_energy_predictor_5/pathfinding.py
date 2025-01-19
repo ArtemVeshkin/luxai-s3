@@ -101,7 +101,7 @@ def create_weights(space):
             #todo: uchest' uvelichenie seen nodes
 
         if node.type == NodeType.nebula:
-            weight += Global.NEBULA_ENERGY_REDUCTION
+            weight += Global.NEBULA_ENERGY_REDUCTION * 3
 
         weights[node.y][node.x] = weight
 
