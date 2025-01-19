@@ -4,7 +4,7 @@ import random
 
 import numpy as np
 from sys import stderr
-from scipy.signal import convolve2dq
+from scipy.signal import convolve2d
 
 from base import (
     Global,
