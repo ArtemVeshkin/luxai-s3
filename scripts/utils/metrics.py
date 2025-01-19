@@ -65,12 +65,19 @@ def calc_winrate_pval(n_wins, total_matches):
     return proportions_ztest(count=n_wins, nobs=total_matches, value=0.5)[1]
 
 
-def calc_winrate_metrics(match_wins_seqs):
+def calc_winrate_metrics(match_wins_seqs, agents_order_is_correct_list):
     team2_wins = 0.
+    team2_wins_as_team_0 = 0.
+    team2_wins_as_team_1 = 0.
     team2_match_wins = [0.] * 5
-    for match_wins in match_wins_seqs:
+    for match_wins, agents_order_is_correct in zip(match_wins_seqs, agents_order_is_correct_list):
         if match_wins[-1][1] > match_wins[-1][0]:
             team2_wins += 1
+            if agents_order_is_correct:
+                team2_wins_as_team_1 += 1
+            else:
+                team2_wins_as_team_0 += 1
+
 
         prev_team2_match_score = 0
         for match_idx in range(5):
@@ -80,10 +87,20 @@ def calc_winrate_metrics(match_wins_seqs):
             prev_team2_match_score = cur_team2_match_score
 
     total_matches = len(match_wins_seqs)
+    total_matches_as_team_1 = len(list(filter(lambda x: x, agents_order_is_correct_list)))
+    total_matches_as_team_0 = total_matches - total_matches_as_team_1
     return {
         'total_winrate': {
             'value': f'{100 * team2_wins / total_matches:.1f}%',
             'p_value': calc_winrate_pval(team2_wins, total_matches)
+        },
+        'team_0_winrate': {
+            'value': f'{100 * team2_wins_as_team_0 / total_matches_as_team_0:.1f}%',
+            'p_value': calc_winrate_pval(team2_wins_as_team_0, total_matches_as_team_0)
+        },
+        'team_1_winrate': {
+            'value': f'{100 * team2_wins_as_team_1 / total_matches_as_team_1:.1f}%',
+            'p_value': calc_winrate_pval(team2_wins_as_team_1, total_matches_as_team_1)
         }
     } | {
         f'match{match_idx + 1}_winrate': {

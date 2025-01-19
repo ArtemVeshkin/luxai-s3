@@ -77,12 +77,14 @@ def main():
     agent1_point_seqs = []
     agent2_point_seqs = []
     match_wins_seqs = []
+    agents_order_is_correct_list = []
     for game_result in tqdm(os.listdir(SCRIPT_DIR / 'runs')):
         with open(SCRIPT_DIR / 'runs' / game_result, 'r') as fh:
             game_results_json = json.load(fh)
 
             player_0 = game_results_json['metadata']['players']['player_0'].split('/')[-2]
-            agents_order_is_correct = player_0 == agent1_name 
+            agents_order_is_correct = player_0 == agent1_name
+            agents_order_is_correct_list.append(agents_order_is_correct)
 
             agent1_point_seqs.append(list(map(lambda x: x['team_points'][0 if agents_order_is_correct else 1], game_results_json['observations'])))
             agent2_point_seqs.append(list(map(lambda x: x['team_points'][1 if agents_order_is_correct else 0], game_results_json['observations'])))
@@ -95,7 +97,7 @@ def main():
                 cur_match_wins.append(team_wins)
             match_wins_seqs.append(cur_match_wins)
 
-    winrate_metrics = calc_winrate_metrics(match_wins_seqs)
+    winrate_metrics = calc_winrate_metrics(match_wins_seqs, agents_order_is_correct_list)
     rows = []
     for metric_name, metric in winrate_metrics.items():
         p_value = metric['p_value']
