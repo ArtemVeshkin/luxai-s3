@@ -448,6 +448,11 @@ class Ship:
     @property
     def coordinates(self):
         return self.node.coordinates if self.node else None
+    
+    def next_coords(self):
+        ship_move_direction = self.action.to_direction()
+        x, y = self.node.coordinates
+        return x + ship_move_direction[0], y + ship_move_direction[1]
 
     def clean(self):
         self.energy = 0
@@ -526,7 +531,7 @@ class Agent:
         self.step = step
         self.match_step = get_match_step(step)
         self.game_num = int(obs["team_wins"].sum())
-        # print(f"start step={match_step}({step})", file=stderr)
+        # print(f"start step={self.match_step}({step})", file=stderr)
 
         if self.match_step == 0:
             # nothing to do here at the beginning of the match
@@ -556,7 +561,6 @@ class Agent:
         # self.harvest()
         self.fight()
         self.employ_unemployed()
-
         self.harvest_if_losing(points, opp_points)
         self.optimize_harvesting()
 
@@ -1012,7 +1016,26 @@ class Agent:
 
 
     def optimize_harvesting(self):
-        pass
+        cur_harvesting_ships = [
+            ship for ship in self.fleet
+            if ship.task == 'harvest' and ship.action in (ActionType.center, ActionType.sap) and ship.target == ship.node
+        ]
+        space_weights = create_weights(self.space)
+        for ship in self.fleet:
+            if ship not in cur_harvesting_ships and ship.task == 'harvest' and ship.action not in (ActionType.center, ActionType.sap):
+                for cur_harvesting_ship in cur_harvesting_ships:
+                    if ship.next_coords() == cur_harvesting_ship.coordinates and cur_harvesting_ship.energy > Global.UNIT_MOVE_COST:
+                        path = astar(
+                            space_weights,
+                            start=ship.coordinates,
+                            goal=ship.target.coordinates,
+                        )
+                        actions = path_to_actions(path)
+                        if len(actions) == 2:
+                            cur_harvesting_ship.action = actions[1]
+                            cur_harvesting_ship.target, ship.target = ship.target, cur_harvesting_ship.target
+
+                        
 
 
     def fight(self):
