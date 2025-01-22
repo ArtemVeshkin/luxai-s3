@@ -10,10 +10,18 @@ interface SizeConfig {
   boardSize: number;
   tilesPerSide: number;
 }
+
+export enum FogOfWar {
+  Both,
+  Team1,
+  Team2,
+  None,
+}
 export interface DisplayConfig {
   energyField: boolean;
   sensorMask: boolean;
   relicConfigs: boolean;
+  fogOfWar: FogOfWar;
 }
 interface ThemeConfig {
   minimalTheme: boolean;
@@ -53,11 +61,32 @@ function tileToCanvas(sizes: SizeConfig, tile: Tile): [number, number] {
 //   return (clampedValue - relativeMin) / (relativeMax - relativeMin);
 // }
 
+function fogOfWarForTile(step: Step, tileX: number, tileY: number): boolean {
+  const fogOfWar = useStore.getState().displayConfig.fogOfWar;
+  const skipTeam1 = !step.teams[0].sensorMask[tileX][tileY];
+  const skipTeam2 = !step.teams[1].sensorMask[tileX][tileY];
+
+  switch (fogOfWar) {
+    case FogOfWar.None:
+      return false;
+    case FogOfWar.Both:
+      return skipTeam1 && skipTeam2;
+    case FogOfWar.Team1:
+      return skipTeam1;
+    case FogOfWar.Team2:
+      return skipTeam2;
+  }
+}
+
 function drawTileBackgrounds(ctx: CanvasRenderingContext2D, config: Config, step: Step, envParams: EnvParams): void {
   const board = step.board;
 
   for (let tileY = 0; tileY < config.tilesPerSide; tileY++) {
     for (let tileX = 0; tileX < config.tilesPerSide; tileX++) {
+      const skip = fogOfWarForTile(step, tileX, tileY);
+      if (skip) {
+        continue;
+      }
       const [canvasX, canvasY] = tileToCanvas(config, { x: tileX, y: tileY });
 
       ctx.fillStyle = 'white';
@@ -107,8 +136,16 @@ function drawTileBackgrounds(ctx: CanvasRenderingContext2D, config: Config, step
   for (let i = 0; i < board.relicNodes.length; i++) {
     const [canvasX, canvasY] = tileToCanvas(config, { x: board.relicNodes[i][0], y: board.relicNodes[i][1] });
 
-    ctx.fillStyle = 'orange';
-    ctx.fillRect(canvasX + config.tileSize / 4, canvasY + config.tileSize / 4, config.tileSize / 2, config.tileSize / 2);
+    if (!fogOfWarForTile(step, board.relicNodes[i][0], board.relicNodes[i][1])) {
+      ctx.fillStyle = 'orange';
+      ctx.fillRect(
+        canvasX + config.tileSize / 4,
+        canvasY + config.tileSize / 4,
+        config.tileSize / 2,
+        config.tileSize / 2,
+      );
+    }
+
     if (config.relicConfigs) {
       for (
         let dx = -Math.floor(envParams.relic_config_size / 2);
@@ -125,14 +162,25 @@ function drawTileBackgrounds(ctx: CanvasRenderingContext2D, config: Config, step
           if (nx < 0 || nx >= config.tilesPerSide || ny < 0 || ny >= config.tilesPerSide) {
             continue;
           }
+          if (fogOfWarForTile(step, nx, ny)) {
+            continue;
+          }
           if (
             board.relicNodeConfigs[i][dx + Math.floor(envParams.relic_config_size / 2)][
               dy + Math.floor(envParams.relic_config_size / 2)
             ] != 0
           ) {
             const [canvasX, canvasY] = tileToCanvas(config, { x: nx, y: ny });
-            ctx.fillStyle = 'rgba(100, 100, 0, 0.1)';
-            ctx.fillRect(canvasX, canvasY, config.tileSize, config.tileSize);
+
+            ctx.strokeStyle = 'rgb(255, 200, 0)';
+            const padding = 2;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(
+              canvasX + padding,
+              canvasY + padding,
+              config.tileSize - padding * 2,
+              config.tileSize - padding * 2,
+            );
           }
         }
       }
@@ -144,11 +192,17 @@ function drawTileBackgrounds(ctx: CanvasRenderingContext2D, config: Config, step
 
 function drawRobot(
   ctx: CanvasRenderingContext2D,
+  step: Step,
   config: Config,
   robot: Robot,
   team: number,
   selectedTile: Tile | null,
 ): void {
+  const skip = fogOfWarForTile(step, robot.tile.x, robot.tile.y);
+  if (skip) {
+    return;
+  }
+
   const [canvasX, canvasY] = tileToCanvas(config, robot.tile);
 
   const isSelected = selectedTile !== null && robot.tile.x === selectedTile.x && robot.tile.y === selectedTile.y;
@@ -242,7 +296,7 @@ function drawBoard(
   }
   for (let i = 0; i < 2; i++) {
     for (const robot of step.teams[i].robots) {
-      drawRobot(ctx, config, robot, i, selectedTile);
+      drawRobot(ctx, step, config, robot, i, selectedTile);
     }
   }
   robotPositions.forEach((count, key) => {
