@@ -1,4 +1,3 @@
-
 from enum import IntEnum
 
 
@@ -32,7 +31,6 @@ class Global:
     ALL_REWARDS_FOUND = False
     OBSTACLE_MOVEMENT_PERIOD_FOUND = False
     OBSTACLE_MOVEMENT_DIRECTION_FOUND = False
-    NEBULA_ENERGY_REDUCTION_FOUND = False
 
     # Game logs:
 

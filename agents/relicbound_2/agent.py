@@ -1,7 +1,4 @@
-
 import copy
-import random
-
 import numpy as np
 from sys import stderr
 from scipy.signal import convolve2d
@@ -15,7 +12,7 @@ from base import (
     warp_point,
     get_opposite,
     is_team_sector,
-    get_match_number
+    get_match_number,
 )
 from debug import show_map, show_energy_field, show_exploration_map
 from pathfinding import (
@@ -27,9 +24,6 @@ from pathfinding import (
     path_to_actions,
     manhattan_distance,
 )
-from energy_predictor import EnergyPredictor
-
-random.seed(42)
 
 
 class Node:
@@ -38,9 +32,7 @@ class Node:
         self.y = y
         self.type = NodeType.unknown
         self.energy = None
-        self.predicted_energy = None
         self.is_visible = False
-        self.visited_times = 0
 
         self._relic = False
         self._reward = False
@@ -78,6 +70,7 @@ class Node:
                 f"Can't change the relic status {self._relic}->{status} for {self}"
                 ", the tile has already been explored"
             )
+
         if status is None:
             self._explored_for_relic = False
             return
@@ -91,10 +84,10 @@ class Node:
                 f"Can't change the reward status {self._reward}->{status} for {self}"
                 ", the tile has already been explored"
             )
+
         if status is None:
             self._explored_for_reward = False
             return
-
 
         self._reward = status
         self._explored_for_reward = True
@@ -117,8 +110,6 @@ class Node:
 
 class Space:
     def __init__(self):
-        self.energy_predictor = EnergyPredictor()
-
         self._nodes: list[list[Node]] = []
         for y in range(SPACE_SIZE):
             row = [Node(x, y) for x in range(SPACE_SIZE)]
@@ -148,24 +139,10 @@ class Space:
     def get_node(self, x, y) -> Node:
         return self._nodes[y][x]
 
-    def get_energy_field(self):
-        space_size = Global.SPACE_SIZE
-        energy_field = np.zeros((space_size, space_size, 2))
-        for y in range(space_size):
-            for x in range(space_size):
-                node: Node = self.get_node(x, y)
-                if node.energy is None:
-                    energy_field[x, y, :] = (0., 0)
-                else:
-                    energy_field[x, y, :] = (node.energy, 1)
-        return energy_field
-
     def update(self, step, obs, team_id, team_reward):
         self.move_obstacles(step)
         self._update_map(obs)
         self._update_relic_map(step, obs, team_id, team_reward)
-        self.energy_predictor.predict_hidden_energy(self)
-
 
     def _update_relic_map(self, step, obs, team_id, team_reward):
         for mask, xy in zip(obs["relic_nodes_mask"], obs["relic_nodes"]):
@@ -375,14 +352,6 @@ class Space:
             # maybe something is wrong
             clear_map_info()
 
-        # The energy field has changed
-        # I cannot predict what the new energy field will be like.
-        if energy_nodes_shifted:
-            self.energy_predictor.update_prev_energy_fields(self)
-
-            for node in self:
-                node.energy = None
-
         for node in self:
             x, y = node.coordinates
             is_visible = bool(sensor_mask[x, y])
@@ -401,6 +370,11 @@ class Space:
 
                 # the energy field should be symmetrical
                 self.get_node(*get_opposite(x, y)).energy = node.energy
+
+            elif energy_nodes_shifted:
+                # The energy field has changed
+                # I cannot predict what the new energy field will be like.
+                node.energy = None
 
     @staticmethod
     def _find_obstacle_movement_period(obstacles_movement_status):
@@ -469,7 +443,7 @@ class Space:
                 x, y = warp_point(node.x + dx, node.y + dy)
                 self.get_node(x, y).type = node_type
             return self
-        
+
     def clear_exploration_info(self):
         Global.REWARD_RESULTS = []
         Global.ALL_RELICS_FOUND = False
@@ -487,7 +461,6 @@ class Ship:
 
         self.task: str | None = None
         self.target: Node | None = None
-        self.sap_direction = None
         self.action: ActionType | None = None
 
     def __repr__(self):
@@ -498,11 +471,6 @@ class Ship:
     @property
     def coordinates(self):
         return self.node.coordinates if self.node else None
-    
-    def next_coords(self):
-        ship_move_direction = self.action.to_direction()
-        x, y = self.node.coordinates
-        return x + ship_move_direction[0], y + ship_move_direction[1]
 
     def clean(self):
         self.energy = 0
@@ -542,12 +510,6 @@ class Fleet:
         ):
             if active:
                 ship.node = space.get_node(*position)
-                if ship.node.type == NodeType.nebula and not Global.NEBULA_ENERGY_REDUCTION_FOUND:
-                    if ship.node.energy is not None:
-                        nebula_energy_reduction = ship.energy + ship.node.energy - Global.UNIT_MOVE_COST - int(energy)
-                        if nebula_energy_reduction in (0, 1, 2, 3, 5, 25):
-                            Global.NEBULA_ENERGY_REDUCTION_FOUND = True
-                            Global.NEBULA_ENERGY_REDUCTION = nebula_energy_reduction
                 ship.energy = int(energy)
                 ship.action = None
             else:
@@ -573,18 +535,13 @@ class Agent:
         self.fleet = Fleet(self.team_id)
         self.opp_fleet = Fleet(self.opp_team_id)
 
-        self.match_step = 0
-        self.game_num = 0
-        self.step = 0
-
     def act(self, step: int, obs, remainingOverageTime: int = 60):
-        self.step = step
-        self.match_step = get_match_step(step)
-        self.game_num = int(obs["team_wins"].sum())
+        match_step = get_match_step(step)
         match_number = get_match_number(step)
-        # print(f"start step={self.match_step}({step})", file=stderr)
 
-        if self.match_step == 0:
+        # print(f"start step={match_step}({step}, {match_number})", file=stderr)
+
+        if match_step == 0:
             # nothing to do here at the beginning of the match
             # just need to clean up some of the garbage that was left after the previous match
             self.fleet.clear()
@@ -596,7 +553,6 @@ class Agent:
             return self.create_actions_array()
 
         points = int(obs["team_points"][self.team_id])
-        opp_points = int(obs["team_points"][self.opp_team_id])
 
         # how many points did we score in the last step
         reward = max(0, points - self.fleet.points)
@@ -605,23 +561,14 @@ class Agent:
         self.fleet.update(obs, self.space)
         self.opp_fleet.update(obs, self.space)
 
-        for ship in self.fleet:
-            ship.node.visited_times += 1
+        # self.show_explored_map()
 
         self.find_relics()
         self.find_rewards()
-        self.old_harvest()
-        # self.harvest()
-        self.fight()
-        self.employ_unemployed()
-        self.harvest_if_losing(points, opp_points)
-        self.optimize_harvesting()
+        self.harvest()
 
-        # self.show_explored_energy_field()
-        # if step >= 405 and step <= 430:
-        #     print(f'step={step}:', file=stderr)
-        #     for ship in self.fleet:
-        #         print(f'ship={ship}, task={ship.task}, target={ship.target}, action={ship.action}', file=stderr)
+        # for ship in self.fleet:
+        #     print(ship, ship.task, ship.target, ship.action, file=stderr)
 
         return self.create_actions_array()
 
@@ -631,52 +578,9 @@ class Agent:
 
         for i, ship in enumerate(ships):
             if ship.action is not None:
-                sap_x, sap_y = ship.sap_direction if ship.action == ActionType.sap else (0, 0)
-                actions[i] = ship.action, sap_x, sap_y
-                ship.sap_direction = (0, 0)
+                actions[i] = ship.action, 0, 0
 
         return actions
-
-    def employ_unemployed(self):
-        unexplored_relics = self.get_unexplored_relics()
-        if len(unexplored_relics) == 0:
-            return
-        for ship in self.fleet:
-            if ship.task is not None or ship.target is not None:
-                continue
-            relic_coordinates, _ = find_closest_target(ship.node.coordinates,
-                                             [relic.coordinates for relic in unexplored_relics])
-            targets = []
-            for x, y in nearby_positions(*relic_coordinates, Global.RELIC_REWARD_RANGE):
-                node = self.space.get_node(x, y)
-                if not node.explored_for_reward and node.is_walkable:
-                    targets.append((x, y))
-            target, _ = find_closest_target(ship.coordinates, targets)
-            if not target:
-                return
-            path = astar(create_weights(self.space), ship.coordinates, target)
-            energy = estimate_energy_cost(self.space, path)
-            actions = path_to_actions(path)
-            if actions and ship.energy >= energy:
-                ship.task = "find_rewards"
-                ship.target = self.space.get_node(*target)
-                ship.action = actions[0]
-        ship_coords = [ship.coordinates for ship in self.fleet]
-        for ship in self.fleet:
-            if ship.task is not None or ship.target is not None:
-                continue
-            target, _ = find_closest_target(ship.node.coordinates,
-                                            [rew.coordinates for rew in self.space.reward_nodes
-                                                if rew.is_walkable and rew.coordinates not in ship_coords])
-            if not target:
-                return
-            path = astar(create_weights(self.space), ship.coordinates, target)
-            energy = estimate_energy_cost(self.space, path)
-            actions = path_to_actions(path)
-            if actions and ship.energy >= energy:
-                ship.task = "harvest"
-                ship.target = self.space.get_node(*target)
-                ship.action = actions[0]
 
     def find_relics(self):
         if Global.ALL_RELICS_FOUND:
@@ -844,8 +748,7 @@ class Agent:
 
         return relic_nodes
 
-
-    def old_harvest(self):
+    def harvest(self):
 
         def set_task(ship, target_node):
             if ship.node == target_node:
@@ -901,233 +804,6 @@ class Agent:
             else:
                 ship.task = None
                 ship.target = None
-
-
-    def _get_ships_centroid(self, ship_indices):
-        ships_centroid_pos = np.array([0, 0])
-        for ship_idx in ship_indices:
-            x, y = self.fleet.ships[ship_idx].coordinates
-            ships_centroid_pos[0] += x
-            ships_centroid_pos[1] += y
-        if len(ship_indices) > 0:
-            ships_centroid_pos = np.clip(
-                (ships_centroid_pos / len(ship_indices))
-            , 0, 23).astype('int')
-        else:
-            ships_centroid_pos = np.array((0, 0) if self.team_id == 0 else (23, 23))
-        return ships_centroid_pos
-
-
-    def _get_sorter_rewards(self, space_weights, remaining_ship_indices):
-        remaining_ships_centroid_pos = self._get_ships_centroid(remaining_ship_indices)
-
-        def rewards_sort_key(reward_node: Node):
-            path = astar(
-                space_weights,
-                start=tuple(remaining_ships_centroid_pos),
-                goal=reward_node.coordinates,
-            )
-            actions = path_to_actions(path)
-            if actions:
-                return len(actions), -estimate_energy_cost(self.space, path)
-            return float('inf'), float('inf')
-
-        sorted_reward_nodes = sorted(
-            self.space.reward_nodes,
-            key=rewards_sort_key
-        )
-        return sorted_reward_nodes
-    
-
-    def _ship_relevance_to_node(self, ship: Ship, node: Node, space_weights):
-        if node.coordinates == ship.coordinates:
-            return 0, ActionType.center
-
-        path = astar(
-            space_weights,
-            start=ship.coordinates,
-            goal=node.coordinates,
-        )
-        path_energy_cost = estimate_energy_cost(self.space, path)
-        actions = path_to_actions(path)
-        path_len = len(path)
-        if (ship.energy - path_energy_cost) >= 0 and actions and path_len <= (100 - self.match_step):
-            return path_len, actions[0]
-
-        return None, None
-
-
-    def harvest(self):
-        space_weights = create_weights(self.space)
-        booked_nodes = set()
-        for ship in self.fleet:
-            if ship.task == 'harvest':
-                relevance, action = self._ship_relevance_to_node(ship, ship.target, space_weights)
-                if relevance is None:
-                    ship.task = None
-                    ship.target = None
-                    ship.action = ActionType.center
-                else:
-                    booked_nodes.add(ship.target)
-                    ship.action = action
-
-
-        remaining_ship_indices = set(
-            ship_idx for ship_idx, ship in enumerate(self.fleet.ships)
-            if ship.node is not None and ship.task is None
-        )
-
-        sorted_reward_nodes = self._get_sorter_rewards(space_weights, remaining_ship_indices)
-        for reward_node in sorted_reward_nodes:
-            if reward_node in booked_nodes:
-                continue
-
-            ship_relevances = [None] * Global.MAX_UNITS
-            ship_actions = [None] * Global.MAX_UNITS
-            for ship_idx in remaining_ship_indices:
-                ship = self.fleet.ships[ship_idx]
-                ship_relevances[ship_idx], ship_actions[ship_idx] = self._ship_relevance_to_node(ship, reward_node, space_weights)
-
-            best_ship_idx = None
-            for ship_idx in remaining_ship_indices:
-                if ship_relevances[ship_idx] is not None:
-                    if best_ship_idx is None:
-                        best_ship_idx = ship_idx
-
-                    if ship_relevances[ship_idx] <= ship_relevances[best_ship_idx]:
-                        if self.fleet.ships[ship_idx].energy < self.fleet.ships[best_ship_idx].energy:
-                            best_ship_idx = ship_idx
-
-            if best_ship_idx is not None:
-                best_ship = self.fleet.ships[best_ship_idx]
-                best_ship.target = reward_node
-                best_ship.task = "harvest"
-                best_ship.action = ship_actions[best_ship_idx]
-                remaining_ship_indices.remove(best_ship_idx)
-
-
-    def harvest_if_losing(self, points, opp_points):
-        remaining_steps = Global.MAX_STEPS_IN_MATCH - self.match_step
-
-        reward = max(0, points - self.fleet.points)
-        opp_reward = max(0, points - self.fleet.points)
-
-        predicted_points = points + remaining_steps * reward
-        opp_predicted_points = opp_points + remaining_steps * opp_reward
-
-        if opp_predicted_points > predicted_points and remaining_steps > 0:
-            # HARVEST AS FAST AS YOU CAN!!!
-
-            missing_harvesters = int((opp_predicted_points - predicted_points) / remaining_steps) + 1
-
-            space_weights = create_weights(self.space)
-            booked_nodes = set()
-            for ship in self.fleet:
-                if ship.task == 'harvest':
-                    booked_nodes.add(ship.target)
-
-            remaining_ship_indices = set(
-                ship_idx for ship_idx, ship in enumerate(self.fleet.ships)
-                if ship.node is not None and ship.task != 'harvest'
-            )
-
-            sorted_reward_nodes = self._get_sorter_rewards(space_weights, remaining_ship_indices)
-            new_harvesters = []
-            for reward_node in sorted_reward_nodes:
-                if reward_node in booked_nodes:
-                    continue
-
-                ship_relevances = [None] * Global.MAX_UNITS
-                ship_actions = [None] * Global.MAX_UNITS
-                for ship_idx in remaining_ship_indices:
-                    ship = self.fleet.ships[ship_idx]
-                    ship_relevances[ship_idx], ship_actions[ship_idx] = self._ship_relevance_to_node(ship, reward_node, space_weights)
-
-                best_ship_idx = None
-                for ship_idx in remaining_ship_indices:
-                    if ship_relevances[ship_idx] is not None:
-                        if best_ship_idx is None:
-                            best_ship_idx = ship_idx
-
-                        if ship_relevances[ship_idx] <= ship_relevances[best_ship_idx]:
-                            if self.fleet.ships[ship_idx].energy < self.fleet.ships[best_ship_idx].energy:
-                                best_ship_idx = ship_idx
-
-                if best_ship_idx is not None:
-                    new_harvesters.append({
-                        'ship': self.fleet.ships[best_ship_idx],
-                        'target': reward_node,
-                        'action': ship_actions[best_ship_idx]
-                    })
-                    remaining_ship_indices.remove(best_ship_idx)
-
-            if len(new_harvesters) >= missing_harvesters:
-                for new_harvester in new_harvesters[:missing_harvesters]:
-                    new_harvester['ship'].target = new_harvester['target']
-                    new_harvester['ship'].task = "harvest"
-                    new_harvester['ship'].action = new_harvester['action']
-
-
-    def optimize_harvesting(self):
-        cur_harvesting_ships = [
-            ship for ship in self.fleet
-            if ship.task == 'harvest' and ship.action in (ActionType.center, ActionType.sap) and ship.target == ship.node
-        ]
-        space_weights = create_weights(self.space)
-        for ship in self.fleet:
-            if ship not in cur_harvesting_ships and ship.task == 'harvest' and ship.action not in (ActionType.center, ActionType.sap):
-                for cur_harvesting_ship in cur_harvesting_ships:
-                    if ship.next_coords() == cur_harvesting_ship.coordinates and cur_harvesting_ship.energy > Global.UNIT_MOVE_COST:
-                        path = astar(
-                            space_weights,
-                            start=ship.coordinates,
-                            goal=ship.target.coordinates,
-                        )
-                        actions = path_to_actions(path)
-                        if len(actions) == 2:
-                            cur_harvesting_ship.action = actions[1]
-                            cur_harvesting_ship.target, ship.target = ship.target, cur_harvesting_ship.target
-
-                        
-
-
-    def fight(self):
-        def find_best_target(ship, targets):
-            #todo: optimizirovat!!!!! schitat cherez dp
-            if self.game_num == 0 and random.random() < 0.7:
-                return None
-            best_target = None
-            max_opp_ship_count = 0
-            for x, y in nearby_positions(*ship.coordinates, Global.UNIT_SAP_RANGE):
-                opp_ship_count = 0
-                for dx in range(-1, 2):
-                    for dy in range(-1, 2):
-                        if (x + dx, y + dy) in targets:
-                            opp_ship_count += 1 if dx == 0 and dy == 0 else 0.25 #todo: pomenyat'!!!!
-                if opp_ship_count > max_opp_ship_count and manhattan_distance(ship.coordinates, (x, y)) <= Global.UNIT_SAP_RANGE:
-                    max_opp_ship_count = opp_ship_count
-                    best_target = (x, y)
-            if max_opp_ship_count <= 1.5 and random.random() < 0.5:
-                return None
-            return best_target
-
-        targets = {opp_ship.coordinates for opp_ship in self.opp_fleet}
-        for x, y in targets:
-            for ship in self.fleet:
-                if manhattan_distance((x, y), ship.coordinates) <= Global.UNIT_SAP_RANGE:
-                    for relic_node in self.space.relic_nodes:
-                        if manhattan_distance((x, y), relic_node.coordinates) <= Global.RELIC_REWARD_RANGE\
-                                or manhattan_distance(ship.coordinates, relic_node.coordinates) <= Global.RELIC_REWARD_RANGE: #todo: mb ubrat' eto uslovie
-                            if ship.node.energy\
-                                    and ship.energy + (ship.node.energy * 2 if ship.node.energy < 0 else 0) > Global.UNIT_SAP_COST:
-                                best_target = find_best_target(ship, targets)
-                                if best_target:
-                                    ship.sap_direction = (best_target[0] - ship.node.x, best_target[1] - ship.node.y)
-                                    ship.action = ActionType.sap
-                                    break
-
-
-
 
     def show_visible_energy_field(self):
         print("Visible energy field:", file=stderr)
