@@ -20,7 +20,7 @@ class Global:
     UNIT_SAP_COST = 30  # OPTIONS: list(range(30, 51))
     UNIT_SAP_RANGE = 3  # OPTIONS: list(range(3, 8))
     UNIT_SENSOR_RANGE = 2  # OPTIONS: [1, 2, 3, 4]
-    OBSTACLE_MOVEMENT_PERIOD = 20  # OPTIONS: 7(?), 10, 20, 40
+    OBSTACLE_MOVEMENT_PERIOD = 20  # OPTIONS: 6.67, 10, 20, 40
     OBSTACLE_MOVEMENT_DIRECTION = (0, 0)  # OPTIONS: [(1, -1), (-1, 1)]
 
     # We will NOT find the exact value of these constants during the game

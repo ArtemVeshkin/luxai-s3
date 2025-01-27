@@ -222,13 +222,9 @@ class Space:
                     self._update_reward_status(*node.coordinates, status=True)
 
             elif reward > len(unknown_nodes):
-                # we shouldn't be here
+                # We shouldn't be here, but sometimes we are. It's not good.
+                # Maybe I'll fix it later.
                 pass
-                # print(
-                #     f"Something wrong with reward result: {result}"
-                #     ", this result will be ignored.",
-                #     file=stderr,
-                # )
 
     def _update_reward_results(self, obs, team_id, team_reward):
         ship_nodes = set()
@@ -390,7 +386,7 @@ class Space:
         elif num_movements <= 8:
             return 10
         else:
-            return 7
+            return 20 / 3
 
     def _find_obstacle_movement_direction(self, obs):
         sensor_mask = obs["sensor_mask"]
@@ -426,9 +422,10 @@ class Space:
             Global.OBSTACLE_MOVEMENT_PERIOD_FOUND
             and Global.OBSTACLE_MOVEMENT_DIRECTION_FOUND
             and Global.OBSTACLE_MOVEMENT_PERIOD > 0
-            and (step - 1) % Global.OBSTACLE_MOVEMENT_PERIOD == 0
         ):
-            self.move(*Global.OBSTACLE_MOVEMENT_DIRECTION, inplace=True)
+            speed = 1 / Global.OBSTACLE_MOVEMENT_PERIOD
+            if (step - 2) * speed % 1 > (step - 1) * speed % 1:
+                self.move(*Global.OBSTACLE_MOVEMENT_DIRECTION, inplace=True)
 
     def move(self, dx: int, dy: int, *, inplace=False) -> "Space":
         if not inplace:
