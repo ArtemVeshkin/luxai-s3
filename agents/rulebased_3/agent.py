@@ -613,7 +613,7 @@ class Agent:
         self.find_rewards()
         self.old_harvest()
         # self.harvest()
-        self.fight()
+        # self.fight()
         self.employ_unemployed()
         self.harvest_if_losing(points, opp_points)
         self.optimize_harvesting()
