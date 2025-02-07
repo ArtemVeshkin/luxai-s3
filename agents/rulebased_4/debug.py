@@ -1,8 +1,8 @@
-
 from sys import stderr
 from collections import defaultdict
 
-from base import Global, NodeType
+from base import Global
+from node import NodeType
 
 
 def show_energy_field(space, only_visible=True):

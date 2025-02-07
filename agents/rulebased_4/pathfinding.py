@@ -1,8 +1,9 @@
-
 import heapq
 import numpy as np
 
-from base import SPACE_SIZE, NodeType, Global, ActionType
+from base import SPACE_SIZE, Global
+from action_type import ActionType
+from node import NodeType
 
 CARDINAL_DIRECTIONS = [(0, 1), (0, -1), (1, 0), (-1, 0)]
 
