@@ -5,12 +5,10 @@ from ppo_game_env import PPOGameEnv
 env = PPOGameEnv()
 
 # Initialize the PPO model using a multi-layer perceptron strategy
-model = PPO("MlpPolicy", env, verbose=1)
+model = PPO("MlpPolicy", env, verbose=0, tensorboard_log='./tb_logs')
 
-# Train 10,000 time steps (can be adjusted as needed)
-model.learn(total_timesteps=int(1e5), progress_bar=True)
+model.learn(total_timesteps=int(5 * 1e7), progress_bar=True)
 
-# Train 10,000 time steps (can be adjusted as needed)
 model.save("ppo_game_env_model")
 
 # Test: Load the model and perform a simulation
