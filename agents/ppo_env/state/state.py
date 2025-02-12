@@ -11,6 +11,30 @@ from .base import (
     get_match_number,
     LAST_MATCH_WHEN_RELIC_CAN_APPEAR
 )
+import numpy as np
+
+
+def env_obs_to_dict_obs(env_obs: EnvObs):
+    dict_obs = {}
+    dict_obs['units'] = {
+        'position': np.array(env_obs.units.position),
+        'energy': np.array(env_obs.units.energy)
+    }
+    dict_obs['units_mask'] = np.array(env_obs.units_mask)
+    dict_obs['sensor_mask'] = np.array(env_obs.sensor_mask)
+    dict_obs['map_features'] = {
+        'energy': np.array(env_obs.map_features.energy),
+        'tile_type': np.array(env_obs.map_features.tile_type)
+    }
+    dict_obs['relic_nodes'] = np.array(env_obs.relic_nodes)
+    dict_obs['relic_nodes_mask'] = np.array(env_obs.relic_nodes_mask)
+    dict_obs['team_points'] = np.array(env_obs.team_points)
+    dict_obs['team_wins'] = np.array(env_obs.team_wins)
+    dict_obs['steps'] = int(env_obs.steps)
+    dict_obs['match_steps'] = int(env_obs.match_steps)
+    
+    return dict_obs
+
 
 
 class State:
@@ -43,10 +67,13 @@ class State:
         self.config.UNIT_SENSOR_RANGE = env_cfg["unit_sensor_range"]
 
     
-    def update(self, obs: EnvObs):
-        self.step = obs.steps
+    def update(self, obs):
+        if isinstance(obs, EnvObs):
+            obs = env_obs_to_dict_obs(obs)
+
+        self.step = obs['steps']
         self.match_step = get_match_step(self.step)
-        self.game_num = int(obs.team_wins.sum())
+        self.game_num = int(obs['team_wins'].sum())
         match_number = get_match_number(self.step)
 
         if self.match_step == 0:
@@ -60,14 +87,14 @@ class State:
                 self.space.clear_exploration_info(self.config)
             return
 
-        self.points = int(obs.team_points[self.team_id])
-        self.opp_points = int(obs.team_points[self.opp_team_id])
+        self.points = int(obs['team_points'][self.team_id])
+        self.opp_points = int(obs['team_points'][self.opp_team_id])
 
         reward = max(0, self.points - self.fleet.points)
 
         self.space.update(self.step, obs, self.team_id, reward, self.config)
         self.fleet.update(obs, self.space, self.config)
-        self.opp_fleet.update(obs, self.spac, self.config)
+        self.opp_fleet.update(obs, self.space, self.config)
 
         for ship in self.fleet:
             ship.node.visited_times += 1

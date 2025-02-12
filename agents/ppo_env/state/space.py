@@ -1,5 +1,6 @@
 import copy
 import numpy as np
+from luxai_s3.state import EnvObs
 from sys import stderr
 from scipy.signal import convolve2d
 from .base import (
@@ -68,7 +69,7 @@ class Space:
                     energy_field[x, y, :] = (node.energy, 1)
         return energy_field
 
-    def update(self, step, obs, team_id, team_reward, config: Config):
+    def update(self, step, obs: EnvObs, team_id, team_reward, config: Config):
         self.move_obstacles(step, config)
         self._update_map(obs, config)
         self._update_relic_map(step, obs, team_id, team_reward, config)
@@ -223,7 +224,7 @@ class Space:
             self._reward_nodes.add(node)
             self._reward_nodes.add(opp_node)
 
-    def _update_map(self, obs, config: Config):
+    def _update_map(self, obs: EnvObs, config: Config):
         sensor_mask = obs["sensor_mask"]
         obs_energy = obs["map_features"]["energy"]
         obs_tile_type = obs["map_features"]["tile_type"]
