@@ -26,7 +26,7 @@ class PPOEnv(gym.Env):
         player_1_actions = self.player_1_agent.act(
             self.player_1_state
         )
-        obs, env_reward, terminated, _, info = self.env.step({
+        obs, env_reward, terminated, truncated, info = self.env.step({
             'player_0': actions,
             'player_1': player_1_actions
         })
@@ -38,9 +38,9 @@ class PPOEnv(gym.Env):
             obs['player_1']
         )
         
-        reward = env_reward
+        reward = env_reward['player_0'] - env_reward['player_1']
         
-        return self.player_0_state.get_obs(), reward, terminated, info
+        return self.player_0_state.get_obs(), reward, terminated['player_0'] | truncated['player_0'], info['player_0']
 
 
     # def render(self):
