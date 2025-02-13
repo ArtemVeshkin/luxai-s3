@@ -1,24 +1,12 @@
 from ppo_env import PPOEnv
+from stable_baselines3 import PPO
 import numpy as np
 from rulebased import Rulebased
 
+env = PPOEnv()
 
-print('Creating env')
-env = PPOEnv(opp_agent=Rulebased)
-print('Created env')
+model = PPO("MlpPolicy", env, verbose=0, tensorboard_log='./tb_logs', n_steps=505, batch_size=505)
 
-print('Resetting env')
-env.reset()
-print('Env is resetted')
+model.learn(total_timesteps=int(5 * 1e5), progress_bar=True)
 
-print('Making step')
-env.step(np.zeros((16, 3), dtype=np.uint8))
-print('Made step')
-
-print('Making 1000 steps')
-for i in range(1000):
-    obs, reward, terminated, info = env.step(np.zeros((16, 3), dtype=np.uint8))
-    print(f'step={i} reward={reward}, terminated={terminated}')
-    if terminated:
-        break
-print('Made 1000 steps')
+model.save("mlp_ppo_model")

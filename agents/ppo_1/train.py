@@ -1,20 +1,10 @@
+from ppo_env import PPOEnv
 from stable_baselines3 import PPO
-from ppo_game_env import PPOGameEnv
 
-# Create an environment instance
-env = PPOGameEnv()
+env = PPOEnv()
 
-# Initialize the PPO model using a multi-layer perceptron strategy
-model = PPO("MlpPolicy", env, verbose=0, tensorboard_log='./tb_logs')
+model = PPO("MlpPolicy", env, verbose=0, tensorboard_log='./tb_logs', n_steps=505, batch_size=505)
 
-model.learn(total_timesteps=int(5 * 1e7), progress_bar=True)
+model.learn(total_timesteps=int(1e4), progress_bar=True)
 
-model.save("ppo_game_env_model")
-
-# Test: Load the model and perform a simulation
-# obs = env.reset()
-# done = False
-# while not done:
-#     action, _ = model.predict(obs)
-#     obs, reward, done, info = env.step(action)
-#     env.render()
+model.save("mlp_ppo_model")
