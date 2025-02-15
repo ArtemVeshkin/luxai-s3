@@ -132,7 +132,7 @@ class State:
             relic_map,
             reward_map,
             *[ship_masks[:, :, idx] for idx in range(MAX_UNITS)]
-        ], axis=-1)
+        ], axis=0)
 
         return obs
 

@@ -20,7 +20,7 @@ class PPOEnv(gym.Env):
         # self.action_space = gym.spaces.Box(low=low, high=high, dtype=np.int16)
         self.action_space = gym.spaces.MultiDiscrete([5] * 16)
 
-        self.observation_space = gym.spaces.Box(low=-1, high=2, shape=(SPACE_SIZE, SPACE_SIZE, 3 + MAX_UNITS), dtype=np.int8)
+        self.observation_space = gym.spaces.Box(low=-1, high=2, shape=(3 + MAX_UNITS, SPACE_SIZE, SPACE_SIZE), dtype=np.int8)
 
         self.player_0_state = State('player_0')
         self.player_1_state = State('player_1')
@@ -46,8 +46,9 @@ class PPOEnv(gym.Env):
             obs['player_1']
         )
         
-        reward = self.player_0_state.points_gain if self.player_0_state.match_step != 0 else 100 * (env_reward['player_0'] - env_reward['player_1'])
-        
+        # reward = self.player_0_state.points_gain if self.player_0_state.match_step != 0 else 100 * (env_reward['player_0'] - env_reward['player_1'])
+        reward = self.player_0_state.points_gain
+
         return self.player_0_state.get_obs(), reward, terminated['player_0'], truncated['player_0'], info['player_0']
 
 
