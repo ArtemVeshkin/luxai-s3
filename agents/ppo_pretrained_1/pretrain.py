@@ -44,22 +44,46 @@ def clear_and_create_dir(path):
     os.makedirs(path)
 
 
+layout = {
+    "Loss": {
+        "softmax_loss": ["Multiline", ["softmax_loss/train", "softmax_loss/test"]],
+    },
+    "Metrics": {
+        "all_accuracy": ["Multiline", ["all_accuracy/train", "all_accuracy/test"]],
+        "alive_accuracy": ["Multiline", ["alive_accuracy/train", "alive_accuracy/test"]],
+        "center_accuracy": ["Multiline", ["center_accuracy/train", "center_accuracy/test"]],
+        "up_accuracy": ["Multiline", ["up_accuracy/train", "up_accuracy/test"]],
+        "right_accuracy": ["Multiline", ["right_accuracy/train", "right_accuracy/test"]],
+        "down_accuracy": ["Multiline", ["down_accuracy/train", "down_accuracy/test"]],
+        "left_accuracy": ["Multiline", ["left_accuracy/train", "left_accuracy/test"]],
+        "accuracy_team_0": ["Multiline", ["accuracy_team_0/train", "accuracy_team_0/test"]],
+        "accuracy_team_1": ["Multiline", ["accuracy_team_1/train", "accuracy_team_1/test"]],
+        "accuracy_match_1": ["Multiline", ["accuracy_match_1/train", "accuracy_match_1/test"]],
+        "accuracy_match_2": ["Multiline", ["accuracy_match_2/train", "accuracy_match_2/test"]],
+        "accuracy_match_3": ["Multiline", ["accuracy_match_3/train", "accuracy_match_3/test"]],
+        "accuracy_match_4": ["Multiline", ["accuracy_match_4/train", "accuracy_match_4/test"]],
+        "accuracy_match_5": ["Multiline", ["accuracy_match_5/train", "accuracy_match_5/test"]],
+    }
+}
+
+
 def main():
     args = tyro.cli(Args)
     DATA_PATH = Path(args.data_path)
     SAVE_PATH = Path(args.save_path)
 
     batch_size = args.batch_size
-    exp_name = f'{args.input_channels}_input_channels_{args.n_res_blocks}_res_blocks_lr_{args.lr}_bs_{batch_size}'
+    exp_name = f'less_all_channels_{args.input_channels}_input_channels_{args.n_res_blocks}_res_blocks_lr_{args.lr}_bs_{batch_size}'
 
     EXP_DIR = SAVE_PATH / 'exps' / exp_name
     clear_and_create_dir(EXP_DIR)
     tb_writer = SummaryWriter(SAVE_PATH / 'pretrain_tb_logs' / exp_name)
+    tb_writer.add_custom_scalars(layout)
 
     model_params = {
         'input_channels': args.input_channels,
         'n_res_blocks': args.n_res_blocks,
-        'all_channel': args.input_channels * 2,
+        'all_channel': args.input_channels,
         'n_actions': 5
     }
     model = ActorNet(model_params)
@@ -100,19 +124,61 @@ def main():
             reduction='none'
         )
         loss = loss * alive_mask
-        loss = loss.mean()
+        loss = loss.sum() / alive_mask.sum()
         return loss
-    
+
 
     def calc_metrics(model_out, actions, info):
-        alive_mask = get_alive_mask(alive_ships).to(CUDA)
+        alive_mask = get_alive_mask(info['alive_ships']).numpy()
         model_out = model_out.reshape(-1, 5, 16)
-        model_actions = torch.argmax(model_out, dim=1)
-        print(f'model_actions.shape={model_actions.shape}')
-        print(f'model_out[0]={model_out[0]}')
-        print(f'model_actions[0]={model_actions[0]}')
+        model_actions = np.argmax(model_out, axis=1)
 
-        return {'123': 1.}
+
+        is_correct = actions == model_actions
+        all_accuracy = is_correct.mean()
+        alive_accuracy = np.ma.masked_where(alive_mask, is_correct).mean()
+
+        center_accuracy = np.ma.masked_where(alive_mask * (actions == 0), is_correct).mean()
+        up_accuracy = np.ma.masked_where(alive_mask * (actions == 1), is_correct).mean()
+        right_accuracy = np.ma.masked_where(alive_mask * (actions == 2), is_correct).mean()
+        down_accuracy = np.ma.masked_where(alive_mask * (actions == 3), is_correct).mean()
+        left_accuracy = np.ma.masked_where(alive_mask * (actions == 4), is_correct).mean()
+
+        players = info['player'].numpy()
+        team_0_mask = np.repeat(players == 0, 16).reshape((-1, 16))
+        team_1_mask = np.repeat(players == 1, 16).reshape((-1, 16))
+        accuracy_team_0 = np.ma.masked_where(alive_mask * team_0_mask, is_correct).mean()
+        accuracy_team_1 = np.ma.masked_where(alive_mask * team_1_mask, is_correct).mean()
+
+        step = info['step'].numpy()
+        match = step // (100 + 1) + 1
+        match_1_mask = np.repeat(match == 1, 16).reshape((-1, 16))
+        match_2_mask = np.repeat(match == 2, 16).reshape((-1, 16))
+        match_3_mask = np.repeat(match == 3, 16).reshape((-1, 16))
+        match_4_mask = np.repeat(match == 4, 16).reshape((-1, 16))
+        match_5_mask = np.repeat(match == 5, 16).reshape((-1, 16))
+        accuracy_match_1 = np.ma.masked_where(alive_mask * match_1_mask, is_correct).mean()
+        accuracy_match_2 = np.ma.masked_where(alive_mask * match_2_mask, is_correct).mean()
+        accuracy_match_3 = np.ma.masked_where(alive_mask * match_3_mask, is_correct).mean()
+        accuracy_match_4 = np.ma.masked_where(alive_mask * match_4_mask, is_correct).mean()
+        accuracy_match_5 = np.ma.masked_where(alive_mask * match_5_mask, is_correct).mean()
+
+        return {
+            'all_accuracy': all_accuracy,
+            'alive_accuracy': alive_accuracy,
+            'center_accuracy': center_accuracy,
+            'up_accuracy': up_accuracy,
+            'right_accuracy': right_accuracy,
+            'down_accuracy': down_accuracy,
+            'left_accuracy': left_accuracy,
+            'accuracy_team_0': accuracy_team_0,
+            'accuracy_team_1': accuracy_team_1,
+            'accuracy_match_1': accuracy_match_1,
+            'accuracy_match_2': accuracy_match_2,
+            'accuracy_match_3': accuracy_match_3,
+            'accuracy_match_4': accuracy_match_4,
+            'accuracy_match_5': accuracy_match_5,
+        }
 
 
     for epoch in range(args.epochs):
@@ -137,7 +203,10 @@ def main():
             loss.backward()
             optimizer.step()
 
-            for metric, value in calc_metrics(model_out, actions, batch['info']):
+            model_out = model_out.cpu().detach().numpy()
+            actions = actions.cpu().detach().numpy()
+            metrics = calc_metrics(model_out, actions, batch['info'])
+            for metric, value in metrics.items():
                 train_metrics[metric] += value * obs.size(0)
 
             train_loss += loss.item() * obs.size(0)
@@ -153,7 +222,10 @@ def main():
             model_out = model(obs)
             loss = calc_loss(model_out, actions, alive_ships)
             
-            for metric, value in calc_metrics(model_out, actions, batch['info']):
+            model_out = model_out.cpu().detach().numpy()
+            actions = actions.cpu().detach().numpy()
+            metrics = calc_metrics(model_out, actions, batch['info'])
+            for metric, value in metrics.items():
                 test_metrics[metric] += value * obs.size(0)
 
             test_loss += loss.item() * obs.size(0)
@@ -164,23 +236,12 @@ def main():
             train_metrics[metric] /= len(train_loader.dataset)
             test_metrics[metric] /= len(test_loader.dataset)
 
-        tb_writer.add_scalars(
-            'softmax_loss',
-            {
-                'train': train_loss,
-                'test': test_loss
-            },
-            epoch + 1
-        )
+        tb_writer.add_scalar('softmax_loss/train', train_loss, epoch + 1)
+        tb_writer.add_scalar('softmax_loss/test', test_loss, epoch + 1)
         for metric in train_metrics.keys():
-            tb_writer.add_scalars(
-                metric,
-                {
-                    'train': train_metrics[metric],
-                    'test': test_metrics[metric]
-                },
-                epoch + 1
-            )
+            tb_writer.add_scalar(f'{metric}/train', train_metrics[metric], epoch + 1)
+            tb_writer.add_scalar(f'{metric}/test', test_metrics[metric], epoch + 1)
+        tb_writer.flush()
     
     model_save_path = EXP_DIR / 'model.pt'
     print(f'Saving model to {model_save_path}')

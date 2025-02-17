@@ -105,7 +105,6 @@ class ActorNet(nn.Module):
             nn.Linear(all_channel // 16 * 24 * 24, 16 * n_actions)
         )
 
-        # _init_w_b([self.actions_conv, self.fleet_actions_conv])
         _init_w_b(self.actions_net)
         nn.init.kaiming_normal_(self.input_conv1.weight)
 

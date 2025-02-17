@@ -11,11 +11,24 @@ class StatesDataset(Dataset):
     def __init__(self, data_path: Path):
         super().__init__()
         self.data_path = data_path
-        self.files = os.listdir(data_path)
+        files = os.listdir(data_path)
+        self.files = files
+        # self.files = self.filter_files(files)
 
 
     def __len__(self):
         return len(self.files)
+
+
+    @staticmethod
+    def filter_files(files):
+        result_files = []
+        for file in files:
+            game, player, step = map(int, (file.split('.')[0]).split('_'))
+            if player == 0:
+                result_files.append(file)
+
+        return result_files
 
 
     @staticmethod
