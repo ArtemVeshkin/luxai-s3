@@ -22,7 +22,7 @@ class Args:
     """Data path (state logs)"""
     save_path: str = '/home/artemveshkin/dev/luxai-s3/agents/ppo_pretrained_1'
     """Checkpoints and logs save path"""
-    epochs: int = 30
+    epochs: int = 60
     """Epochs count"""
     batch_size: int = 512
     """Batch size"""
@@ -73,7 +73,7 @@ def main():
     SAVE_PATH = Path(args.save_path)
 
     batch_size = args.batch_size
-    exp_name = f'less_all_channels_{args.input_channels}_input_channels_{args.n_res_blocks}_res_blocks_lr_{args.lr}_bs_{batch_size}'
+    exp_name = f'{args.input_channels}_input_channels_{args.n_res_blocks}_res_blocks_lr_{args.lr}_bs_{batch_size}'
 
     EXP_DIR = SAVE_PATH / 'exps' / exp_name
     clear_and_create_dir(EXP_DIR)
@@ -124,7 +124,8 @@ def main():
             reduction='none'
         )
         loss = loss * alive_mask
-        loss = loss.sum() / alive_mask.sum()
+        loss = loss.sum(dim=1) / torch.max(alive_mask.sum(dim=1), torch.ones((actions.shape[0])).to(CUDA))
+        loss = loss.mean()
         return loss
 
 
