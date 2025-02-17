@@ -8,6 +8,7 @@ energy_logs/
 models/energy_predictor/exps/
 models/energy_predictor/tb_logs/
 tb_logs/
+pretrain_tb_logs/
 state_logs/
 
 
