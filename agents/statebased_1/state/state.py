@@ -9,10 +9,12 @@ from .base import (
     Config,
     get_match_step,
     get_match_number,
+    get_opposite,
     LAST_MATCH_WHEN_RELIC_CAN_APPEAR,
     SPACE_SIZE,
     MAX_UNITS
 )
+from copy import deepcopy
 import numpy as np
 
 
@@ -63,6 +65,8 @@ class State:
         self.points_gain = 0
         self.our_wins = 0
         self.opp_wins = 0
+        self.points = 0
+        self.opp_points = 0
 
     
     def set_config(self, env_cfg):
@@ -110,18 +114,19 @@ class State:
 
     def get_obs(self):
         space_map = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=np.int8)
+        space_nodes = self._get_space_nodes()
         for y in range(SPACE_SIZE):
             for x in range(SPACE_SIZE):
-                node = self.space.get_node(x, y)
+                node = space_nodes[x][y]
                 space_map[x, y] = node.type.value
 
         relic_map = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=np.int8)
-        for node in self.space.relic_nodes:
+        for node in self._get_relic_nodes():
             x, y = node.coordinates
             relic_map[x, y] = 1
 
         reward_map = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=np.int8)
-        for node in self.space.reward_nodes:
+        for node in self._get_reward_nodes():
             x, y = node.coordinates
             reward_map[x, y] = 1
 
@@ -139,6 +144,89 @@ class State:
         ], axis=0)
 
         return obs
+    
+    
+    @staticmethod
+    def _get_ships(fleet: Fleet):
+        ships = []
+        needs_mirroring = fleet.team_id == 1
+        for ship in fleet.ships:
+            node = None
+            if ship.node is not None:
+                ship_node = deepcopy(ship.node)
+                if needs_mirroring:
+                    x, y = get_opposite(*ship_node.coordinates)
+                    ship_node.x = x
+                    ship_node.y = y
+                node = ship_node
+            ships.append({
+                'unit_id': ship.unit_id,
+                'energy': ship.energy,
+                'node': node
+            })
+        return ships
+    
+
+    def _get_space_nodes(self):
+        nodes = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=object)
+        for y in range(SPACE_SIZE):
+            for x in range(SPACE_SIZE):
+                if self.team_id == 1:
+                    x, y = get_opposite(x, y)
+                node = deepcopy(self.space.get_node(x, y))
+                if self.team_id == 1:
+                    x, y = get_opposite(*node.coordinates)
+                    node.x = x
+                    node.y = y
+                nodes[x][y] = node
+        return nodes
+
+
+    def _get_relic_nodes(self):
+        relic_nodes = deepcopy(self.space.relic_nodes)
+        if self.team_id == 1:
+            for node in relic_nodes:
+                x, y = get_opposite(*node.coordinates)
+                node.x = x
+                node.y = y
+        return relic_nodes
+
+
+    def _get_reward_nodes(self):
+        reward_nodes = deepcopy(self.space.reward_nodes)
+        if self.team_id == 1:
+            for node in reward_nodes:
+                x, y = get_opposite(*node.coordinates)
+                node.x = x
+                node.y = y
+        return reward_nodes
+
+    
+    def to_dict(self):
+        game_state = {
+            'match_step': self.match_step,
+            'game_num': self.game_num,
+            'step': self.step,
+            'points_gain': self.points_gain,
+            'our_wins': self.our_wins,
+            'opp_wins': self.opp_wins,
+            'points': self.points,
+            'opp_points': self.opp_points
+        }
+        space = {
+            'nodes': self._get_space_nodes(),
+            'relic_nodes': self._get_relic_nodes(),
+            'reward_nodes': self._get_reward_nodes()
+        }
+        
+        return {
+            'game_state': game_state,
+            'config': self.config,
+            'ships': self._get_ships(self.fleet),
+            'opp_ships': self._get_ships(self.opp_fleet),
+            'space': space
+        }
+        
 
 
     def reset(self, env_cfg):

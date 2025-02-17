@@ -37,7 +37,7 @@ class Rulebased:
         self.find_rewards(state)
         self.old_harvest(state)
         # self.harvest()
-        self.fight(state)
+        # self.fight(state)
         self.employ_unemployed(state)
         self.harvest_if_losing(state)
         self.optimize_harvesting(state)
