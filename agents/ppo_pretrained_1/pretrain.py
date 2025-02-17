@@ -83,7 +83,7 @@ def main():
     model_params = {
         'input_channels': args.input_channels,
         'n_res_blocks': args.n_res_blocks,
-        'all_channel': args.input_channels,
+        'all_channel': args.input_channels * 2,
         'n_actions': 5
     }
     model = ActorNet(model_params)
