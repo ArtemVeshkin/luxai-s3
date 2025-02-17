@@ -5,6 +5,7 @@ import gym
 import torch
 from torch import nn
 import torch.nn.functional as F
+from sys import stderr
 
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
@@ -59,9 +60,14 @@ class ResidualBlock(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
 def _init_w_b(layers):
+    # for layer in layers:
+    #     nn.init.kaiming_normal_(layer.weight)
+    #     #nn.init.zeros_(layer.bias)
     for layer in layers:
-        nn.init.kaiming_normal_(layer.weight)
-        #nn.init.zeros_(layer.bias)
+        if isinstance(layer, nn.Conv2d):
+            nn.init.kaiming_normal_(layer.weight)
+        if isinstance(layer, nn.Linear):
+            nn.init.xavier_normal_(layer.weight)
 
 
 class IdentityFeatureExtractor(BaseFeaturesExtractor):
@@ -88,10 +94,15 @@ class ActorNet(nn.Module):
         ])
         self.spectral_norm = nn.utils.spectral_norm(nn.Conv2d(all_channel, all_channel, kernel_size=1, stride=1, padding=0, bias=False))
 
-        self.actions_conv = nn.Conv2d(all_channel, n_actions, kernel_size=1, stride=1, padding=0, bias=False)
-        self.fleet_actions_conv = nn.Conv1d(24 * 24, 16, kernel_size=1, stride=1, padding=0, bias=True)
+        self.actions_net = nn.Sequential(
+            nn.Conv2d(all_channel, all_channel // 4, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.LeakyReLU(),
+            nn.Flatten(start_dim=1),
+            nn.Linear(all_channel // 4 * 24 * 24, 16 * n_actions)
+        )
 
-        _init_w_b([self.actions_conv, self.fleet_actions_conv])
+        # _init_w_b([self.actions_conv, self.fleet_actions_conv])
+        _init_w_b(self.actions_net)
         nn.init.kaiming_normal_(self.input_conv1.weight)
 
 
@@ -109,11 +120,7 @@ class ActorNet(nn.Module):
         return x
     
     def get_actions_from_embed(self, x: torch.Tensor) -> torch.Tensor:
-        fleet_actions = self.actions_conv(x)
-        fleet_actions = fleet_actions.flatten(start_dim=2,end_dim=3)
-        fleet_actions = F.relu(fleet_actions.transpose(1,2))
-        fleet_actions = self.fleet_actions_conv(fleet_actions)
-        return fleet_actions
+        return self.actions_net(x)
 
 
 class ActorCriticNet(nn.Module):
@@ -132,9 +139,12 @@ class ActorCriticNet(nn.Module):
         # IMPORTANT:
         # Save output dimensions, used to create the distributions
         self.latent_dim_pi = model_params['n_actions'] * 16
-        self.latent_dim_vf = model_params["all_channel"]
+        self.latent_dim_vf = 1
 
         self.actor_net = ActorNet(model_params)
+        self.all_channel = model_params["all_channel"]
+        self.critic_fc = nn.Linear(self.all_channel, 1)
+        nn.init.xavier_normal_(self.critic_fc.weight)
 
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -146,14 +156,22 @@ class ActorCriticNet(nn.Module):
         fleet_actions = self.actor_net.get_actions_from_embed(x)
 
         critic_x = torch.flatten(x, start_dim=-2, end_dim=-1).sum(dim=-1) / (24 * 24)
+        critic_value = self.critic_fc(critic_x.view(-1, self.all_channel)).view(-1)
 
-        return fleet_actions.flatten(start_dim=1, end_dim=2), critic_x
+        return fleet_actions, critic_value
+
+
+    def forward_actor(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.actor_net.get_embed(x)
+        fleet_actions = self.actor_net.get_actions_from_embed(x)
+        return fleet_actions
 
 
     def forward_critic(self, x: torch.Tensor) -> torch.Tensor:
         x = self.actor_net.get_embed(x)
         critic_x = torch.flatten(x, start_dim=-2, end_dim=-1).sum(dim=-1) / (24 * 24)
-        return critic_x
+        critic_value = self.critic_fc(critic_x.view(-1, self.all_channel)).view(-1)
+        return critic_value
 
 
 
@@ -178,6 +196,7 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
             **kwargs,
         )
         self.action_net = nn.Identity()
+        self.value_net = nn.Identity()
 
 
     def _build_mlp_extractor(self) -> None:

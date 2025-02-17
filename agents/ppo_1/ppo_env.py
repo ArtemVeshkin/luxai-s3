@@ -5,6 +5,7 @@ from state.state import State
 from dummy_agent import DummyAgent
 import numpy as np
 from state.base import SPACE_SIZE, MAX_UNITS
+from sys import stderr
 
 
 class PPOEnv(gym.Env):
