@@ -9,7 +9,9 @@ from .base import (
     Config,
     get_match_step,
     get_match_number,
-    LAST_MATCH_WHEN_RELIC_CAN_APPEAR
+    LAST_MATCH_WHEN_RELIC_CAN_APPEAR,
+    SPACE_SIZE,
+    MAX_UNITS
 )
 import numpy as np
 
@@ -58,6 +60,9 @@ class State:
         self.match_step = 0
         self.game_num = 0
         self.step = 0
+        self.points_gain = 0
+        self.our_wins = 0
+        self.opp_wins = 0
 
     
     def set_config(self, env_cfg):
@@ -74,6 +79,8 @@ class State:
         self.step = obs['steps']
         self.match_step = get_match_step(self.step)
         self.game_num = int(obs['team_wins'].sum())
+        self.our_wins = obs['team_wins'][self.team_id]
+        self.opp_wins = obs['team_wins'][self.opp_team_id]
         match_number = get_match_number(self.step)
 
         if self.match_step == 0:
@@ -91,6 +98,7 @@ class State:
         self.opp_points = int(obs['team_points'][self.opp_team_id])
 
         reward = max(0, self.points - self.fleet.points)
+        self.points_gain = reward
 
         self.space.update(self.step, obs, self.team_id, reward, self.config)
         self.fleet.update(obs, self.space, self.config)
@@ -101,7 +109,36 @@ class State:
 
 
     def get_obs(self):
-        pass
+        space_map = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=np.int8)
+        for y in range(SPACE_SIZE):
+            for x in range(SPACE_SIZE):
+                node = self.space.get_node(x, y)
+                space_map[x, y] = node.type.value
+
+        relic_map = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=np.int8)
+        for node in self.space.relic_nodes:
+            x, y = node.coordinates
+            relic_map[x, y] = 1
+
+        reward_map = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=np.int8)
+        for node in self.space.reward_nodes:
+            x, y = node.coordinates
+            reward_map[x, y] = 1
+
+        ship_masks = np.zeros((SPACE_SIZE, SPACE_SIZE, MAX_UNITS))
+        for idx, ship in enumerate(self.fleet.ships):
+            if ship.node is not None:
+                x, y = ship.node.coordinates
+                ship_masks[x, y, idx] = 1
+
+        obs = np.stack([
+            space_map,
+            relic_map,
+            reward_map,
+            *[ship_masks[:, :, idx] for idx in range(MAX_UNITS)]
+        ], axis=0)
+
+        return obs
 
 
     def reset(self, env_cfg):

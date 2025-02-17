@@ -61,6 +61,8 @@ class State:
         self.game_num = 0
         self.step = 0
         self.points_gain = 0
+        self.our_wins = 0
+        self.opp_wins = 0
 
     
     def set_config(self, env_cfg):
@@ -77,6 +79,8 @@ class State:
         self.step = obs['steps']
         self.match_step = get_match_step(self.step)
         self.game_num = int(obs['team_wins'].sum())
+        self.our_wins = obs['team_wins'][self.team_id]
+        self.opp_wins = obs['team_wins'][self.opp_team_id]
         match_number = get_match_number(self.step)
 
         if self.match_step == 0:
@@ -115,7 +119,7 @@ class State:
         for node in self.space.relic_nodes:
             x, y = node.coordinates
             relic_map[x, y] = 1
-        
+
         reward_map = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=np.int8)
         for node in self.space.reward_nodes:
             x, y = node.coordinates
