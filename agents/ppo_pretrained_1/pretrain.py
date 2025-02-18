@@ -22,13 +22,13 @@ class Args:
     """Data path (state logs)"""
     save_path: str = '/home/artemveshkin/dev/luxai-s3/agents/ppo_pretrained_1'
     """Checkpoints and logs save path"""
-    epochs: int = 60
+    epochs: int = 100
     """Epochs count"""
     batch_size: int = 512
     """Batch size"""
     n_res_blocks: int = 2
     """n_res_blocks"""
-    input_channels: int = 5 + 16 + 16
+    input_channels: int = 12 + 16 + 16
     """input_channels"""
     lr: float = 0.00005
     """lr"""
@@ -47,6 +47,7 @@ def clear_and_create_dir(path):
 layout = {
     "Loss": {
         "softmax_loss": ["Multiline", ["softmax_loss/train", "softmax_loss/test"]],
+        "softmax_unmasked_loss": ["Multiline", ["softmax_unmasked_loss/train", "softmax_unmasked_loss/test"]],
     },
     "Metrics": {
         "all_accuracy": ["Multiline", ["all_accuracy/train", "all_accuracy/test"]],
@@ -118,6 +119,8 @@ def main():
     def calc_loss(model_out, actions, alive_ships):
         model_out = model_out.reshape(-1, 5, 16)
         alive_mask = get_alive_mask(alive_ships).to(CUDA)
+        model_alive_mask = alive_mask.repeat((1, 5)).reshape((-1, 5, 16))
+        model_out = model_out * model_alive_mask
         loss = F.cross_entropy(
             model_out,
             actions,
@@ -127,6 +130,17 @@ def main():
         loss = loss.sum(dim=1) / torch.max(alive_mask.sum(dim=1), torch.ones((actions.shape[0])).to(CUDA))
         loss = loss.mean()
         return loss
+    
+
+    def calc_unmasked_loss(model_out, actions):
+        model_out = torch.Tensor(model_out)
+        actions = torch.Tensor(actions).long()
+        model_out = model_out.reshape(-1, 5, 16)
+        loss = F.cross_entropy(
+            model_out,
+            actions
+        )
+        return loss.item()
 
 
     def calc_metrics(model_out, actions, info):
@@ -165,6 +179,7 @@ def main():
         accuracy_match_5 = np.ma.masked_where(alive_mask * match_5_mask, is_correct).mean()
 
         return {
+            'softmax_unmasked_loss': calc_unmasked_loss(model_out, actions),
             'all_accuracy': all_accuracy,
             'alive_accuracy': alive_accuracy,
             'center_accuracy': center_accuracy,
