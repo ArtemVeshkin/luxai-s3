@@ -12,8 +12,7 @@ class StatesDataset(Dataset):
         super().__init__()
         self.data_path = data_path
         files = os.listdir(data_path)
-        self.files = files
-        # self.files = self.filter_files(files)
+        self.files = self.filter_files(files)
 
 
     def __len__(self):
@@ -25,8 +24,9 @@ class StatesDataset(Dataset):
         result_files = []
         for file in files:
             game, player, step = map(int, (file.split('.')[0]).split('_'))
-            if player == 0:
-                result_files.append(file)
+            if step % 101 == 0:
+                continue
+            result_files.append(file)
 
         return result_files
 
@@ -110,7 +110,7 @@ class StatesDataset(Dataset):
         actions = data['actions'][:, 0]
 
         obs = self._state_to_obs(state)
-        alive_ships = ','.join(str(ship_idx) for ship_idx in range(16) if state['ships'][ship_idx]['node'] is not None)
+        alive_ships = ','.join(str(ship_idx) for ship_idx in range(16) if (state['ships'][ship_idx]['node'] is not None) and (state['ships'][ship_idx]['energy'] > 0))
 
         info = {
             'game': game,

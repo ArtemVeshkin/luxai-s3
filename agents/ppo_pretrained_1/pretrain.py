@@ -22,7 +22,7 @@ class Args:
     """Data path (state logs)"""
     save_path: str = '/home/artemveshkin/dev/luxai-s3/agents/ppo_pretrained_1'
     """Checkpoints and logs save path"""
-    epochs: int = 100
+    epochs: int = 50
     """Epochs count"""
     batch_size: int = 512
     """Batch size"""
@@ -30,7 +30,7 @@ class Args:
     """n_res_blocks"""
     input_channels: int = 12 + 16 + 16
     """input_channels"""
-    lr: float = 0.00005
+    lr: float = 0.00001
     """lr"""
 
 
@@ -129,6 +129,7 @@ def main():
         loss = loss * alive_mask
         loss = loss.sum(dim=1) / torch.max(alive_mask.sum(dim=1), torch.ones((actions.shape[0])).to(CUDA))
         loss = loss.mean()
+        # loss = loss.sum() / alive_mask.sum()
         return loss
     
 
@@ -143,27 +144,31 @@ def main():
         return loss.item()
 
 
+    def calc_mean_by_mask(mask, matrix):
+        masked_matrix = matrix * mask
+        return masked_matrix.sum() / mask.sum()
+
+
     def calc_metrics(model_out, actions, info):
         alive_mask = get_alive_mask(info['alive_ships']).numpy()
         model_out = model_out.reshape(-1, 5, 16)
         model_actions = np.argmax(model_out, axis=1)
 
-
         is_correct = actions == model_actions
-        all_accuracy = is_correct.mean()
-        alive_accuracy = np.ma.masked_where(alive_mask, is_correct).mean()
 
-        center_accuracy = np.ma.masked_where(alive_mask * (actions == 0), is_correct).mean()
-        up_accuracy = np.ma.masked_where(alive_mask * (actions == 1), is_correct).mean()
-        right_accuracy = np.ma.masked_where(alive_mask * (actions == 2), is_correct).mean()
-        down_accuracy = np.ma.masked_where(alive_mask * (actions == 3), is_correct).mean()
-        left_accuracy = np.ma.masked_where(alive_mask * (actions == 4), is_correct).mean()
+        all_accuracy = is_correct.mean()
+        alive_accuracy = calc_mean_by_mask(alive_mask, is_correct)
+        center_accuracy = calc_mean_by_mask(alive_mask * (actions == 0), is_correct)
+        up_accuracy = calc_mean_by_mask(alive_mask * (actions == 1), is_correct)
+        right_accuracy = calc_mean_by_mask(alive_mask * (actions == 2), is_correct)
+        down_accuracy = calc_mean_by_mask(alive_mask * (actions == 3), is_correct)
+        left_accuracy = calc_mean_by_mask(alive_mask * (actions == 4), is_correct)
 
         players = info['player'].numpy()
         team_0_mask = np.repeat(players == 0, 16).reshape((-1, 16))
         team_1_mask = np.repeat(players == 1, 16).reshape((-1, 16))
-        accuracy_team_0 = np.ma.masked_where(alive_mask * team_0_mask, is_correct).mean()
-        accuracy_team_1 = np.ma.masked_where(alive_mask * team_1_mask, is_correct).mean()
+        accuracy_team_0 = calc_mean_by_mask(alive_mask * team_0_mask, is_correct)
+        accuracy_team_1 = calc_mean_by_mask(alive_mask * team_1_mask, is_correct)
 
         step = info['step'].numpy()
         match = step // (100 + 1) + 1
@@ -172,11 +177,11 @@ def main():
         match_3_mask = np.repeat(match == 3, 16).reshape((-1, 16))
         match_4_mask = np.repeat(match == 4, 16).reshape((-1, 16))
         match_5_mask = np.repeat(match == 5, 16).reshape((-1, 16))
-        accuracy_match_1 = np.ma.masked_where(alive_mask * match_1_mask, is_correct).mean()
-        accuracy_match_2 = np.ma.masked_where(alive_mask * match_2_mask, is_correct).mean()
-        accuracy_match_3 = np.ma.masked_where(alive_mask * match_3_mask, is_correct).mean()
-        accuracy_match_4 = np.ma.masked_where(alive_mask * match_4_mask, is_correct).mean()
-        accuracy_match_5 = np.ma.masked_where(alive_mask * match_5_mask, is_correct).mean()
+        accuracy_match_1 = calc_mean_by_mask(alive_mask * match_1_mask, is_correct)
+        accuracy_match_2 = calc_mean_by_mask(alive_mask * match_2_mask, is_correct)
+        accuracy_match_3 = calc_mean_by_mask(alive_mask * match_3_mask, is_correct)
+        accuracy_match_4 = calc_mean_by_mask(alive_mask * match_4_mask, is_correct)
+        accuracy_match_5 = calc_mean_by_mask(alive_mask * match_5_mask, is_correct)
 
         return {
             'softmax_unmasked_loss': calc_unmasked_loss(model_out, actions),
