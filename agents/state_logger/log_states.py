@@ -39,7 +39,7 @@ def prepare_agent_folder(target_path: Path, agent_path: Path):
 
 @dataclass
 class Args:
-    n_runs: int = 250
+    n_runs: int = 500
     """How much matches to play"""
     test_size: float = 0.2
     """Test size"""
@@ -83,7 +83,7 @@ def main():
             'luxai-s3',
             SCRIPT_DIR / agent_name / "main.py",
             SCRIPT_DIR / agent_name / "main.py",
-            f'--seed={run_idx}',
+            f'--seed={500 + run_idx}',
             f'--output={SCRIPT_DIR / "out.json"}'
         ))
         p.wait()
