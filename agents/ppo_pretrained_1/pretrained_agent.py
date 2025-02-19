@@ -14,7 +14,7 @@ class PretrainedAgent:
             'n_actions': 5
         })
         self.model.load_state_dict(torch.load(
-            '/home/artemveshkin/dev/luxai-s3/agents/ppo_pretrained_1/pretrained.pt'
+            './pretrained.pt'
         , weights_only=True))
         self.model.eval()
 
