@@ -10,6 +10,7 @@ models/energy_predictor/tb_logs/
 tb_logs/
 pretrain_tb_logs/
 state_logs/
+exps/
 
 
 # Byte-compiled / optimized / DLL files

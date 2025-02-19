@@ -74,7 +74,8 @@ def main():
     SAVE_PATH = Path(args.save_path)
 
     batch_size = args.batch_size
-    exp_name = f'{args.input_channels}_input_channels_{args.n_res_blocks}_res_blocks_lr_{args.lr}_bs_{batch_size}'
+    # exp_name = f'more_data_{args.input_channels}_input_channels_{args.n_res_blocks}_res_blocks_lr_{args.lr}_bs_{batch_size}'
+    exp_name = 'debug'
 
     EXP_DIR = SAVE_PATH / 'exps' / exp_name
     clear_and_create_dir(EXP_DIR)
@@ -267,7 +268,8 @@ def main():
     model_save_path = EXP_DIR / 'model.pt'
     print(f'Saving model to {model_save_path}')
     model = model.to(CPU).eval()
-    torch.jit.script(model).save(model_save_path)
+    # torch.jit.script(model).save(model_save_path)
+    torch.save(model.state_dict(), model_save_path)
 
 
 if __name__ == "__main__":

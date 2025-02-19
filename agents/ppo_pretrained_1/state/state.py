@@ -113,34 +113,69 @@ class State:
 
 
     def get_obs(self):
-        space_map = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=np.int8)
+        explored_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        visible_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        nebula_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        asteroid_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        explored_for_relic_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        explored_for_reward_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        real_energy_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        predicted_energy_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
         space_nodes = self._get_space_nodes()
         for y in range(SPACE_SIZE):
             for x in range(SPACE_SIZE):
                 node = space_nodes[x][y]
-                space_map[x, y] = node.type.value
+                explored_map[x, y] = float(node.type.value != -1)
+                visible_map[x, y] = float(node.is_visible)
+                nebula_map[x, y] = float(node.type.value == 1)
+                asteroid_map[x, y] = float(node.type.value == 2)
+                explored_for_relic_map[x, y] = float(node.explored_for_relic)
+                explored_for_reward_map[x, y] = float(node.explored_for_reward)
+                real_energy_map[x, y] = node.energy if node.energy is not None else 0.
+                predicted_energy_map[x, y] = node.predicted_energy if node.predicted_energy is not None else 0.
 
         relic_map = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=np.int8)
         for node in self._get_relic_nodes():
             x, y = node.coordinates
-            relic_map[x, y] = 1
+            relic_map[x, y] = 1.
 
         reward_map = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=np.int8)
         for node in self._get_reward_nodes():
             x, y = node.coordinates
-            reward_map[x, y] = 1
+            reward_map[x, y] = 1.
 
         ship_masks = np.zeros((SPACE_SIZE, SPACE_SIZE, MAX_UNITS))
-        for idx, ship in enumerate(self.fleet.ships):
-            if ship.node is not None:
-                x, y = ship.node.coordinates
-                ship_masks[x, y, idx] = 1
+        ship_energies = np.zeros((SPACE_SIZE, SPACE_SIZE, MAX_UNITS))
+        for idx, ship in enumerate(self._get_ships(self.fleet)):
+            if ship['node'] is not None:
+                x, y = ship['node'].coordinates
+                ship_masks[x, y, idx] = 1.
+                ship_energies[x, y, idx] = ship['energy']
+
+        dist_to_center_x = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        dist_to_center_y = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        for x in range(SPACE_SIZE // 2):
+            dist_to_center_x[SPACE_SIZE // 2 + x, :] = x
+            dist_to_center_x[SPACE_SIZE // 2 - x, :] = x
+        for y in range(SPACE_SIZE // 2):
+            dist_to_center_y[:, SPACE_SIZE // 2 + y] = y
+            dist_to_center_y[:, SPACE_SIZE // 2 - y] = y
 
         obs = np.stack([
-            space_map,
+            explored_map,
+            visible_map,
+            nebula_map,
+            asteroid_map,
+            explored_for_relic_map,
+            explored_for_reward_map,
+            real_energy_map,
+            predicted_energy_map,
             relic_map,
             reward_map,
-            *[ship_masks[:, :, idx] for idx in range(MAX_UNITS)]
+            dist_to_center_x,
+            dist_to_center_y,
+            *[ship_masks[:, :, idx] for idx in range(MAX_UNITS)],
+            *[ship_energies[:, :, idx] for idx in range(MAX_UNITS)]
         ], axis=0)
 
         return obs
