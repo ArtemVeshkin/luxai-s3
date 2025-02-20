@@ -12,6 +12,7 @@ class StatesDataset(Dataset):
         super().__init__()
         self.data_path = data_path
         files = os.listdir(data_path)
+        # files = files[:int(len(files) * 0.1)]
         self.files = self.filter_files(files)
 
 
@@ -65,12 +66,16 @@ class StatesDataset(Dataset):
             reward_map[x, y] = 1.
 
         ship_masks = np.zeros((SPACE_SIZE, SPACE_SIZE, MAX_UNITS))
-        ship_energies = np.zeros((SPACE_SIZE, SPACE_SIZE, MAX_UNITS))
+        ship_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        ship_energy_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        ship_is_harvesting_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
         for idx, ship in enumerate(state['ships']):
             if ship['node'] is not None:
                 x, y = ship['node'].coordinates
                 ship_masks[x, y, idx] = 1.
-                ship_energies[x, y, idx] = ship['energy']
+                ship_map[x, y] = 1.
+                ship_energy_map[x, y] = ship['energy']
+                ship_is_harvesting_map[x, y] = float(ship['node'].reward)
 
         dist_to_center_x = np.zeros((SPACE_SIZE, SPACE_SIZE))
         dist_to_center_y = np.zeros((SPACE_SIZE, SPACE_SIZE))
@@ -82,6 +87,7 @@ class StatesDataset(Dataset):
             dist_to_center_y[:, SPACE_SIZE // 2 - y] = y
 
         obs = np.stack([
+            *[ship_masks[:, :, idx] for idx in range(MAX_UNITS)],
             explored_map,
             visible_map,
             nebula_map,
@@ -94,8 +100,9 @@ class StatesDataset(Dataset):
             reward_map,
             dist_to_center_x,
             dist_to_center_y,
-            *[ship_masks[:, :, idx] for idx in range(MAX_UNITS)],
-            *[ship_energies[:, :, idx] for idx in range(MAX_UNITS)]
+            ship_map,
+            ship_energy_map,
+            ship_is_harvesting_map
         ], axis=0)
 
         return obs

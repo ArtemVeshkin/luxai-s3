@@ -6,6 +6,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from sys import stderr
+from state.base import MAX_UNITS, SPACE_SIZE
 
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
@@ -87,6 +88,7 @@ class ActorNet(nn.Module):
         all_channel = model_params["all_channel"]
         n_actions = model_params['n_actions']
         input_channels = model_params['input_channels']
+        self.input_channels = input_channels
 
         self.input_conv1 = nn.Conv2d(input_channels, all_channel, kernel_size=1, stride=1, padding=0, bias=False)
         self.res_blocks = nn.ModuleList([
@@ -94,24 +96,30 @@ class ActorNet(nn.Module):
         ])
         self.spectral_norm = nn.utils.spectral_norm(nn.Conv2d(all_channel, all_channel, kernel_size=1, stride=1, padding=0, bias=False))
 
-        self.actions_net = nn.Sequential(
-            nn.Conv2d(all_channel, all_channel // 4, kernel_size=1, stride=1, padding=0, bias=False),
-            nn.BatchNorm2d(all_channel // 4),
-            nn.LeakyReLU(),
-            nn.Conv2d(all_channel // 4, all_channel // 16, kernel_size=1, stride=1, padding=0, bias=False),
-            nn.BatchNorm2d(all_channel // 16),
-            nn.LeakyReLU(),
-            nn.Flatten(start_dim=1),
-            nn.Linear(all_channel // 16 * 24 * 24, 16 * n_actions)
-        )
+        self.actions_conv = nn.Conv2d(all_channel, n_actions, kernel_size=1, stride=1, padding=0, bias=False)
 
-        _init_w_b(self.actions_net)
+        nn.init.kaiming_normal_(self.actions_conv.weight)
         nn.init.kaiming_normal_(self.input_conv1.weight)
 
 
+    def get_x_and_ships_mask(self, x: torch.Tensor):
+        # if x.shape[1] == self.input_channels:
+        #     ships_mask = torch.zeros(
+        #         (x.shape[0], MAX_UNITS, SPACE_SIZE, SPACE_SIZE)
+        #     , device=x.device)
+        #     return x, ships_mask
+
+        ships_mask = x[:, :MAX_UNITS, :, :]
+        ships_mask = ships_mask.flatten(start_dim=2,end_dim=3)
+        ships_mask = ships_mask.transpose(1,2)
+        return x[:, MAX_UNITS:, :, :], ships_mask
+
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x, ships_mask = self.get_x_and_ships_mask(x)
+
         x = self.get_embed(x)
-        x = self.get_actions_from_embed(x)
+        x = self.get_actions_from_embed(x, ships_mask)
         return x
 
     
@@ -122,9 +130,17 @@ class ActorNet(nn.Module):
         x = self.spectral_norm(x)
         return x
     
-    def get_actions_from_embed(self, x: torch.Tensor) -> torch.Tensor:
-        return self.actions_net(x)
+    def get_actions_from_embed(self, x: torch.Tensor, ships_mask) -> torch.Tensor:
+        actions_map = self.actions_conv(x)
+        actions_map = actions_map.flatten(start_dim=2,end_dim=3)
+        actions_map = actions_map.transpose(1,2)
 
+        result_actions_map = torch.cat([
+            (actions_map * ships_mask[:, :, idx:idx+1]).sum(dim=1) for idx in range(MAX_UNITS)
+        ], dim=1)
+        result_actions_map
+
+        return result_actions_map
 
 class ActorCriticNet(nn.Module):
     """

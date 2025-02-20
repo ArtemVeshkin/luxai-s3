@@ -26,9 +26,9 @@ class Args:
     """Epochs count"""
     batch_size: int = 512
     """Batch size"""
-    n_res_blocks: int = 2
+    n_res_blocks: int = 8
     """n_res_blocks"""
-    input_channels: int = 12 + 16 + 16
+    input_channels: int = 15
     """input_channels"""
     lr: float = 0.00001
     """lr"""
@@ -74,7 +74,7 @@ def main():
     SAVE_PATH = Path(args.save_path)
 
     batch_size = args.batch_size
-    exp_name = f'{args.input_channels}_input_channels_{args.n_res_blocks}_res_blocks_lr_{args.lr}_bs_{batch_size}'
+    exp_name = f'{args.input_channels}_input_channels_{args.n_res_blocks}_res_blocks_lr_{args.lr}'
     # exp_name = 'debug'
 
     EXP_DIR = SAVE_PATH / 'exps' / exp_name
@@ -90,7 +90,7 @@ def main():
     }
     model = ActorNet(model_params)
     model.to(CUDA)
-    summary(model, input_size=(model_params['input_channels'], 24, 24))
+    summary(model, input_size=(model_params['input_channels'] + 16, 24, 24))
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
@@ -98,13 +98,13 @@ def main():
         StatesDataset(DATA_PATH / 'train'),
         batch_size=batch_size,
         shuffle=True,
-        num_workers=20
+        num_workers=30
     )
     test_loader = DataLoader(
         StatesDataset(DATA_PATH / 'test'),
         batch_size=batch_size,
         shuffle=False,
-        num_workers=20
+        num_workers=30
     )
 
     
@@ -118,26 +118,24 @@ def main():
 
 
     def calc_loss(model_out, actions, alive_ships):
-        model_out = model_out.reshape(-1, 5, 16)
+        model_out = model_out.reshape(-1, 16, 5).transpose(1,2)
         alive_mask = get_alive_mask(alive_ships).to(CUDA)
-        model_alive_mask = alive_mask.repeat((1, 5)).reshape((-1, 5, 16))
-        model_out = model_out * model_alive_mask
         loss = F.cross_entropy(
             model_out,
             actions,
             reduction='none'
         )
         loss = loss * alive_mask
-        loss = loss.sum(dim=1) / torch.max(alive_mask.sum(dim=1), torch.ones((actions.shape[0])).to(CUDA))
-        loss = loss.mean()
-        # loss = loss.sum() / alive_mask.sum()
+        # loss = loss.sum(dim=1) / torch.max(alive_mask.sum(dim=1), torch.ones((actions.shape[0])).to(CUDA))
+        # loss = loss.mean()
+        loss = loss.sum() / alive_mask.sum()
         return loss
     
 
     def calc_unmasked_loss(model_out, actions):
         model_out = torch.Tensor(model_out)
         actions = torch.Tensor(actions).long()
-        model_out = model_out.reshape(-1, 5, 16)
+        model_out = model_out.reshape(-1, 16, 5).transpose(1, 2)
         loss = F.cross_entropy(
             model_out,
             actions
@@ -147,13 +145,15 @@ def main():
 
     def calc_mean_by_mask(mask, matrix):
         masked_matrix = matrix * mask
+        if mask.sum() == 0:
+            return 0.
         return masked_matrix.sum() / mask.sum()
 
 
     def calc_metrics(model_out, actions, info):
         alive_mask = get_alive_mask(info['alive_ships']).numpy()
-        model_out = model_out.reshape(-1, 5, 16)
-        model_actions = np.argmax(model_out, axis=1)
+        model_out = model_out.reshape(-1, 16, 5)
+        model_actions = np.argmax(model_out, axis=2)
 
         is_correct = actions == model_actions
 
