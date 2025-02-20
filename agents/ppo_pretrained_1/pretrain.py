@@ -22,7 +22,7 @@ class Args:
     """Data path (state logs)"""
     save_path: str = '/home/artemveshkin/dev/luxai-s3/agents/ppo_pretrained_1'
     """Checkpoints and logs save path"""
-    epochs: int = 50
+    epochs: int = 30
     """Epochs count"""
     batch_size: int = 512
     """Batch size"""
