@@ -7,10 +7,11 @@ import torch
 
 class PretrainedAgent:
     def __init__(self):
+        input_channles = 21
         self.model = ActorNet({
-            'input_channels': 44,
-            'n_res_blocks': 2,
-            'all_channel': 88,
+            'input_channels': input_channles,
+            'n_res_blocks': 8,
+            'all_channel': input_channles * 2,
             'n_actions': 5
         })
         self.model.load_state_dict(torch.load(
@@ -21,7 +22,7 @@ class PretrainedAgent:
 
     def act(self, state: State):
         obs = torch.Tensor(state.get_obs()).unsqueeze(0)
-        model_out = self.model(obs)[0]
-        action = torch.argmax(model_out.reshape((5, 16)), dim=0)
-        action = np.array([[a, 0, 0] for a in action], dtype=np.int8)
+        model_out = self.model(obs).reshape(-1, 16, 5).detach().numpy()
+        model_actions = np.argmax(model_out, axis=2)[0]
+        action = np.array([[a, 0, 0] for a in model_actions], dtype=np.int8)
         return action

@@ -113,44 +113,66 @@ class State:
 
 
     def get_obs(self):
-        explored_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
-        visible_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
-        nebula_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
-        asteroid_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
-        explored_for_relic_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
-        explored_for_reward_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
-        real_energy_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
-        predicted_energy_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        is_explored = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        is_visible = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        is_empty = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        is_nebula = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        is_asteroid = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        is_explored_for_relic = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        is_explored_for_reward = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        real_energy = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        predicted_energy = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        is_pos_real_energy_zone = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        is_pos_predicted_energy_zone = np.zeros((SPACE_SIZE, SPACE_SIZE))
+
         space_nodes = self._get_space_nodes()
         for y in range(SPACE_SIZE):
             for x in range(SPACE_SIZE):
                 node = space_nodes[x][y]
-                explored_map[x, y] = float(node.type.value != -1)
-                visible_map[x, y] = float(node.is_visible)
-                nebula_map[x, y] = float(node.type.value == 1)
-                asteroid_map[x, y] = float(node.type.value == 2)
-                explored_for_relic_map[x, y] = float(node.explored_for_relic)
-                explored_for_reward_map[x, y] = float(node.explored_for_reward)
-                real_energy_map[x, y] = node.energy if node.energy is not None else 0.
-                predicted_energy_map[x, y] = node.predicted_energy if node.predicted_energy is not None else 0.
+                is_explored[x, y] = float(node.type.value != -1)
+                is_visible[x, y] = float(node.is_visible)
+                is_empty[x, y] = float(node.type.value == 0)
+                is_nebula[x, y] = float(node.type.value == 1)
+                is_asteroid[x, y] = float(node.type.value == 2)
+                is_explored_for_relic[x, y] = float(node.explored_for_relic)
+                is_explored_for_reward[x, y] = float(node.explored_for_reward)
+                real_energy[x, y] = node.energy if node.energy is not None else 0.
+                predicted_energy[x, y] = node.predicted_energy if node.predicted_energy is not None else 0.
+                is_pos_real_energy_zone[x, y] = float(node.energy is not None and (node.energy > 0))
+                is_pos_predicted_energy_zone[x, y] = float(node.predicted_energy is not None and (node.predicted_energy > 0))
 
-        relic_map = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=np.int8)
+        is_relic = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=np.int8)
         for node in self._get_relic_nodes():
             x, y = node.coordinates
-            relic_map[x, y] = 1.
+            is_relic[x, y] = 1.
 
-        reward_map = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=np.int8)
+        is_reward = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=np.int8)
         for node in self._get_reward_nodes():
             x, y = node.coordinates
-            reward_map[x, y] = 1.
+            is_reward[x, y] = 1.
 
         ship_masks = np.zeros((SPACE_SIZE, SPACE_SIZE, MAX_UNITS))
-        ship_energies = np.zeros((SPACE_SIZE, SPACE_SIZE, MAX_UNITS))
+
+        own_ships = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        own_ships_energy = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        own_ship_is_harvesting = np.zeros((SPACE_SIZE, SPACE_SIZE))
         for idx, ship in enumerate(self._get_ships(self.fleet)):
             if ship['node'] is not None:
                 x, y = ship['node'].coordinates
                 ship_masks[x, y, idx] = 1.
-                ship_energies[x, y, idx] = ship['energy']
+                own_ships[x, y] = 1.
+                own_ships_energy[x, y] = ship['energy']
+                own_ship_is_harvesting[x, y] = float(ship['node'].reward)
+
+        opp_ships = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        opp_ships_energy = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        opp_ship_is_harvesting = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        for idx, ship in enumerate(self._get_ships(self.opp_fleet)):
+            if ship['node'] is not None:
+                x, y = ship['node'].coordinates
+                opp_ships[x, y] = 1.
+                opp_ships_energy[x, y] = ship['energy']
+                opp_ship_is_harvesting[x, y] = float(ship['node'].reward)
 
         dist_to_center_x = np.zeros((SPACE_SIZE, SPACE_SIZE))
         dist_to_center_y = np.zeros((SPACE_SIZE, SPACE_SIZE))
@@ -162,20 +184,28 @@ class State:
             dist_to_center_y[:, SPACE_SIZE // 2 - y] = y
 
         obs = np.stack([
-            explored_map,
-            visible_map,
-            nebula_map,
-            asteroid_map,
-            explored_for_relic_map,
-            explored_for_reward_map,
-            real_energy_map,
-            predicted_energy_map,
-            relic_map,
-            reward_map,
+            *[ship_masks[:, :, idx] for idx in range(MAX_UNITS)],
+            is_explored,
+            is_visible,
+            is_empty,
+            is_nebula,
+            is_asteroid,
+            is_explored_for_relic,
+            is_explored_for_reward,
+            real_energy,
+            predicted_energy,
+            is_pos_real_energy_zone,
+            is_pos_predicted_energy_zone,
+            is_relic,
+            is_reward,
             dist_to_center_x,
             dist_to_center_y,
-            *[ship_masks[:, :, idx] for idx in range(MAX_UNITS)],
-            *[ship_energies[:, :, idx] for idx in range(MAX_UNITS)]
+            own_ships,
+            own_ships_energy,
+            own_ship_is_harvesting,
+            opp_ships,
+            opp_ships_energy,
+            opp_ship_is_harvesting
         ], axis=0)
 
         return obs
