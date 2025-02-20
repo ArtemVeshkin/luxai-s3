@@ -103,11 +103,11 @@ class ActorNet(nn.Module):
 
 
     def get_x_and_ships_mask(self, x: torch.Tensor):
-        # if x.shape[1] == self.input_channels:
-        #     ships_mask = torch.zeros(
-        #         (x.shape[0], MAX_UNITS, SPACE_SIZE, SPACE_SIZE)
-        #     , device=x.device)
-        #     return x, ships_mask
+        if x.shape[1] == self.input_channels:
+            ships_mask = torch.zeros(
+                (x.shape[0], MAX_UNITS, SPACE_SIZE, SPACE_SIZE)
+            , device=x.device)
+            return x, ships_mask
 
         ships_mask = x[:, :MAX_UNITS, :, :]
         ships_mask = ships_mask.flatten(start_dim=2,end_dim=3)
@@ -161,6 +161,10 @@ class ActorCriticNet(nn.Module):
         self.latent_dim_vf = 1
 
         self.actor_net = ActorNet(model_params)
+        if model_params['acton_net_path'] is not None:
+            self.actor_net.load_state_dict(torch.load(
+                model_params['acton_net_path']
+            , weights_only=True))
         self.all_channel = model_params["all_channel"]
         self.critic_fc = nn.Linear(self.all_channel, 1)
         nn.init.xavier_normal_(self.critic_fc.weight)
@@ -171,8 +175,9 @@ class ActorCriticNet(nn.Module):
         :return: (th.Tensor, th.Tensor) latent_policy, latent_value of the specified network.
             If all layers are shared, then ``latent_policy == latent_value``
         """
+        x, ships_mask = self.actor_net.get_x_and_ships_mask(x)
         x = self.actor_net.get_embed(x)
-        fleet_actions = self.actor_net.get_actions_from_embed(x)
+        fleet_actions = self.actor_net.get_actions_from_embed(x, ships_mask)
 
         critic_x = torch.flatten(x, start_dim=-2, end_dim=-1).sum(dim=-1) / (24 * 24)
         critic_value = self.critic_fc(critic_x.view(-1, self.all_channel)).view(-1)
@@ -181,12 +186,11 @@ class ActorCriticNet(nn.Module):
 
 
     def forward_actor(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.actor_net.get_embed(x)
-        fleet_actions = self.actor_net.get_actions_from_embed(x)
-        return fleet_actions
+        return self.actor_net(x)
 
 
     def forward_critic(self, x: torch.Tensor) -> torch.Tensor:
+        x, _ = self.actor_net.get_x_and_ships_mask(x)
         x = self.actor_net.get_embed(x)
         critic_x = torch.flatten(x, start_dim=-2, end_dim=-1).sum(dim=-1) / (24 * 24)
         critic_value = self.critic_fc(critic_x.view(-1, self.all_channel)).view(-1)
@@ -219,10 +223,12 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
 
 
     def _build_mlp_extractor(self) -> None:
+        input_channles = 21
         model_param = {
-            'input_channels': 19,
-            'n_res_blocks': 2,
-            'all_channel': 28,
-            'n_actions': 5
+            'input_channels': input_channles,
+            'n_res_blocks': 8,
+            'all_channel': input_channles * 2,
+            'n_actions': 5,
+            'acton_net_path': './pretrained.pt'
         }
         self.mlp_extractor = ActorCriticNet(model_param)
