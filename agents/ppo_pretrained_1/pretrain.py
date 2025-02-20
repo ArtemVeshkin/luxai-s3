@@ -205,11 +205,11 @@ def main():
 
     for epoch in range(args.epochs):
         print(f'Epoch {epoch}')
-        train_loss = 0.0
-        test_loss = 0.0
+        train_loss = []
+        test_loss = []
 
-        train_metrics = defaultdict(float)
-        test_metrics = defaultdict(float)
+        train_metrics = defaultdict(list)
+        test_metrics = defaultdict(list)
 
         print('Train step')
         model.train()
@@ -224,14 +224,15 @@ def main():
             loss = calc_loss(model_out, actions, alive_ships)
             loss.backward()
             optimizer.step()
+            loss = loss.detach()
 
             model_out = model_out.cpu().detach().numpy()
             actions = actions.cpu().detach().numpy()
             metrics = calc_metrics(model_out, actions, batch['info'])
             for metric, value in metrics.items():
-                train_metrics[metric] += value * obs.size(0)
+                train_metrics[metric].append(value)
 
-            train_loss += loss.item() * obs.size(0)
+            train_loss.append(loss.item())
 
         print('Eval step')
         model.eval()
@@ -248,15 +249,15 @@ def main():
             actions = actions.cpu().detach().numpy()
             metrics = calc_metrics(model_out, actions, batch['info'])
             for metric, value in metrics.items():
-                test_metrics[metric] += value * obs.size(0)
+                test_metrics[metric].append(value)
 
-            test_loss += loss.item() * obs.size(0)
+            test_loss.append(loss.item())
         
-        train_loss = train_loss / len(train_loader.dataset)
-        test_loss = test_loss / len(test_loader.dataset)
+        train_loss = np.mean(train_loss)
+        test_loss = np.mean(test_loss)
         for metric in train_metrics.keys():
-            train_metrics[metric] /= len(train_loader.dataset)
-            test_metrics[metric] /= len(test_loader.dataset)
+            train_metrics[metric] = np.mean(train_metrics[metric])
+            test_metrics[metric] = np.mean(test_metrics[metric])
 
         tb_writer.add_scalar('softmax_loss/train', train_loss, epoch + 1)
         tb_writer.add_scalar('softmax_loss/test', test_loss, epoch + 1)

@@ -12,7 +12,7 @@ class StatesDataset(Dataset):
         super().__init__()
         self.data_path = data_path
         files = os.listdir(data_path)
-        # files = files[:int(len(files) * 0.1)]
+        # files = files[:int(len(files) * 0.05)]
         self.files = self.filter_files(files)
 
 
@@ -59,8 +59,8 @@ class StatesDataset(Dataset):
                 is_explored_for_reward[x, y] = float(node.explored_for_reward)
                 real_energy[x, y] = node.energy if node.energy is not None else 0.
                 predicted_energy[x, y] = node.predicted_energy if node.predicted_energy is not None else 0.
-                is_pos_real_energy_zone[x, y] = node.energy and (node.energy > 0)
-                is_pos_predicted_energy_zone[x, y] = node.predicted_energy and (node.predicted_energy > 0)
+                is_pos_real_energy_zone[x, y] = float(node.energy is not None and (node.energy > 0))
+                is_pos_predicted_energy_zone[x, y] = float(node.predicted_energy is not None and (node.predicted_energy > 0))
 
         is_relic = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=np.int8)
         for node in state['space']['relic_nodes']:
