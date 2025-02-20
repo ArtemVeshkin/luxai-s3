@@ -28,7 +28,7 @@ class Args:
     """Batch size"""
     n_res_blocks: int = 8
     """n_res_blocks"""
-    input_channels: int = 15
+    input_channels: int = 21
     """input_channels"""
     lr: float = 0.00001
     """lr"""
