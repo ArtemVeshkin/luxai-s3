@@ -22,14 +22,14 @@ class Args:
     """Data path (state logs)"""
     save_path: str = '/home/artemveshkin/dev/luxai-s3/agents/ppo_pretrained_1'
     """Checkpoints and logs save path"""
-    epochs: int = 30
+    epochs: int = 50
     """Epochs count"""
     batch_size: int = 512
     """Batch size"""
     n_res_blocks: int = 8
     """n_res_blocks"""
-    input_channels: int = 21
-    """input_channels"""
+    all_channel: int = 64
+    """all_channel"""
     lr: float = 0.00001
     """lr"""
 
@@ -74,7 +74,7 @@ def main():
     SAVE_PATH = Path(args.save_path)
 
     batch_size = args.batch_size
-    exp_name = f'{args.input_channels}_input_channels_{args.n_res_blocks}_res_blocks_lr_{args.lr}'
+    exp_name = f'{args.n_res_blocks}_res_blocks_{args.all_channel}_all_channel_lr_{args.lr}'
     # exp_name = 'debug'
 
     EXP_DIR = SAVE_PATH / 'exps' / exp_name
@@ -83,14 +83,23 @@ def main():
     tb_writer.add_custom_scalars(layout)
 
     model_params = {
-        'input_channels': args.input_channels,
-        'n_res_blocks': args.n_res_blocks,
-        'all_channel': args.input_channels * 2,
-        'n_actions': 5
+        'input_channels': 22,
+        'n_res_blocks': 8,
+        'all_channel': args.all_channel,
+        'n_actions': 5,
+        'num_features_count': 18,
+        'ohe_features_count': 49,
+        'emb_dim': 9,
     }
     model = ActorNet(model_params)
+
+    # LOAD CHECKPOINT
+    # model.load_state_dict(torch.load(
+    #     '/home/artemveshkin/dev/luxai-s3/agents/ppo_pretrained_1/exps/with_global_info_8_res_blocks_64_all_channel_lr_1e-05/model.pt'
+    # , weights_only=True))
+
     model.to(CUDA)
-    summary(model, input_size=(model_params['input_channels'] + 16, 24, 24))
+    summary(model, input_size=(model_params['input_channels'] + 16 + 2, 24, 24))
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 

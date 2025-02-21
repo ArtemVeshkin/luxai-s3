@@ -7,12 +7,14 @@ import torch
 
 class PretrainedAgent:
     def __init__(self):
-        input_channles = 21
         self.model = ActorNet({
-            'input_channels': input_channles,
+            'input_channels': 22,
             'n_res_blocks': 8,
-            'all_channel': input_channles * 2,
-            'n_actions': 5
+            'all_channel': 64,
+            'n_actions': 5,
+            'num_features_count': 18,
+            'ohe_features_count': 49,
+            'emb_dim': 9,
         })
         self.model.load_state_dict(torch.load(
             './pretrained.pt'

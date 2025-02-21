@@ -21,7 +21,7 @@ class PPOEnv(gym.Env):
         # self.action_space = gym.spaces.Box(low=low, high=high, dtype=np.int16)
         self.action_space = gym.spaces.MultiDiscrete([5] * 16)
 
-        self.observation_space = gym.spaces.Box(low=-20, high=500, shape=(21 + 16, SPACE_SIZE, SPACE_SIZE), dtype=np.double)
+        self.observation_space = gym.spaces.Box(low=-20, high=500, shape=(22 + 16 + 2, SPACE_SIZE, SPACE_SIZE), dtype=np.double)
 
         self.player_0_state = State('player_0')
         self.player_1_state = State('player_1')

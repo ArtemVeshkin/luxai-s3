@@ -88,9 +88,19 @@ class ActorNet(nn.Module):
         all_channel = model_params["all_channel"]
         n_actions = model_params['n_actions']
         input_channels = model_params['input_channels']
+        self.num_features_count = model_params['num_features_count']
+        self.ohe_features_count = model_params['ohe_features_count']
+        emb_dim = model_params['emb_dim']
+
         self.input_channels = input_channels
 
-        self.input_conv1 = nn.Conv2d(input_channels, all_channel, kernel_size=1, stride=1, padding=0, bias=False)
+        self.embedding_layer = nn.Linear(self.ohe_features_count, emb_dim)
+        self.conv1 = nn.Conv2d(emb_dim, emb_dim, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv2 = nn.Conv2d(self.num_features_count, self.num_features_count, kernel_size=1, stride=1, padding=0, bias=False)
+        global_channels = emb_dim + self.num_features_count
+        self.conv3 = nn.Conv2d(global_channels, global_channels, kernel_size=1, stride=1, padding=0, bias=False)
+
+        self.input_conv1 = nn.Conv2d(input_channels + global_channels, all_channel, kernel_size=1, stride=1, padding=0, bias=False)
         self.res_blocks = nn.ModuleList([
             ResidualBlock(all_channel, all_channel) for _ in range(n_res_blocks)
         ])
@@ -98,6 +108,9 @@ class ActorNet(nn.Module):
 
         self.actions_conv = nn.Conv2d(all_channel, n_actions, kernel_size=1, stride=1, padding=0, bias=False)
 
+        nn.init.kaiming_normal_(self.conv1.weight)
+        nn.init.kaiming_normal_(self.conv2.weight)
+        nn.init.kaiming_normal_(self.conv3.weight)
         nn.init.kaiming_normal_(self.actions_conv.weight)
         nn.init.kaiming_normal_(self.input_conv1.weight)
 
@@ -111,7 +124,7 @@ class ActorNet(nn.Module):
 
         ships_mask = x[:, :MAX_UNITS, :, :]
         ships_mask = ships_mask.flatten(start_dim=2,end_dim=3)
-        ships_mask = ships_mask.transpose(1,2)
+        ships_mask = ships_mask.transpose(1, 2)
         return x[:, MAX_UNITS:, :, :], ships_mask
 
 
@@ -122,8 +135,32 @@ class ActorNet(nn.Module):
         x = self.get_actions_from_embed(x, ships_mask)
         return x
 
-    
+    def get_global_info_embed(self, x: torch.Tensor) -> torch.Tensor:
+        num_features = x[:, 0, :, :].flatten(1)[:, :self.num_features_count]
+        ohe_features = x[:, 1, :, :].flatten(1)[:, :self.ohe_features_count]
+
+        ohe_features = self.embedding_layer(ohe_features)
+        ohe_features = ohe_features.view(-1, ohe_features.shape[1], 1, 1).expand(-1, ohe_features.shape[1], SPACE_SIZE, SPACE_SIZE)
+        ohe_features = self.conv1(ohe_features)
+        ohe_features = F.leaky_relu(ohe_features)
+
+        num_features = num_features.view(-1, num_features.shape[1], 1, 1).expand(-1, num_features.shape[1], SPACE_SIZE, SPACE_SIZE)
+        num_features = self.conv2(num_features)
+        num_features = F.leaky_relu(num_features)
+
+        global_features = torch.cat([ohe_features, num_features], dim=1)
+        global_features = self.conv3(global_features)
+        return global_features
+
+
+
     def get_embed(self, x: torch.Tensor) -> torch.Tensor:
+        global_info = x[:, :2, :, :]
+        map_features = x[:, 2:, :, :]
+
+        global_info_embed = self.get_global_info_embed(global_info)
+
+        x = torch.cat([global_info_embed, map_features], dim=1)
         x = self.input_conv1(x)
         for block in self.res_blocks:
             x = block(x)
@@ -223,12 +260,14 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
 
 
     def _build_mlp_extractor(self) -> None:
-        input_channles = 21
         model_param = {
-            'input_channels': input_channles,
+            'input_channels': 22,
             'n_res_blocks': 8,
-            'all_channel': input_channles * 2,
+            'all_channel': 64,
             'n_actions': 5,
+            'num_features_count': 18,
+            'ohe_features_count': 49,
+            'emb_dim': 9,
             'acton_net_path': './pretrained.pt'
         }
         self.mlp_extractor = ActorCriticNet(model_param)
