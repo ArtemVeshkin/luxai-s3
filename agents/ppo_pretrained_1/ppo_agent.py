@@ -2,6 +2,8 @@ from state.state import State
 from stable_baselines3 import PPO
 import numpy as np
 from sys import stderr
+import torch
+from state.action_type import _DIRECTIONS
 
 
 class PPOAgent:
@@ -10,7 +12,28 @@ class PPOAgent:
 
 
     def act(self, state: State):
-        obs = state.get_obs()
-        action, _ = self.ppo_model.predict(obs, deterministic=False)
-        action = np.array([[a, 0, 0] for a in action], dtype=np.int8)
+        obs = np.array([state.get_obs()])
+        predicted_actions = self.ppo_model.policy.mlp_extractor.forward_actor(torch.Tensor(obs)).detach().numpy()[0]
+        choosen_actions = np.zeros((16))
+        for ship_idx in range(16):
+            ship = state.fleet.ships[ship_idx]
+            if ship.node is None or ship.energy == 0:
+                continue
+            x, y = ship.node.coordinates
+            ship_predicted_actions = predicted_actions[ship_idx * 5:(ship_idx + 1) * 5]
+            best_actions = np.argsort(-ship_predicted_actions)
+            for a in best_actions:
+                if a == 0 and not ship.node.reward:
+                    continue
+                direction = _DIRECTIONS[a]
+                next_x = direction[0] + x
+                next_y = direction[1] + y
+                if next_x > 23 or next_x < 0 or next_y > 23 or next_y < 0:
+                    continue
+                if not state.space.get_node(next_x, next_y).is_walkable:
+                    continue
+                choosen_actions[ship_idx] = a
+                break
+
+        action = np.array([[a, 0, 0] for a in choosen_actions], dtype=np.int8)
         return action
