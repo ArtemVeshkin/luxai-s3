@@ -23,8 +23,11 @@ class PPOEnv(gym.Env):
 
         self.observation_space = gym.spaces.Box(low=-20, high=500, shape=(22 + 16 + 2, SPACE_SIZE, SPACE_SIZE), dtype=np.double)
 
+        print('creating state 0')
         self.player_0_state = State('player_0')
+        print('creating state 1')
         self.player_1_state = State('player_1')
+        print('created states')
         self.player_1_agent = opp_agent()
 
         self.reset()
@@ -49,7 +52,7 @@ class PPOEnv(gym.Env):
         # reward = 0. if self.player_0_state.match_step != 100 else (-1 if p1_points > p0_points else 1) * points_diff
         # reward = 0. if self.player_0_state.match_step != 100 else np.sqrt(p0_points)
         reward = self.player_0_state.points_gain
-        print(f'Step={self.player_0_state.step}; reward={reward}; p0_points={p0_points}; p1_points={p1_points}')
+        # print(f'Step={self.player_0_state.step}; reward={reward}; p0_points={p0_points}; p1_points={p1_points}')
 
         if self.player_0_state.match_step == 100:
             empty_actions = np.zeros((16, 3), dtype=np.int8)

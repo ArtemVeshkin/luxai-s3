@@ -9,7 +9,7 @@ from pathlib import Path
 
 class EnergyPredictor:
     def __init__(self):
-        model_path_prefix = Path('./state/' if 'LUXAI_ROOT_PATH' in os.environ else '/kaggle_simulations/agent/state')
+        model_path_prefix = Path('./state/')
         self.energy_predictor = torch.jit.load(model_path_prefix / 'energy_predictor.pt')
         self.energy_predictor.eval()
         # print("Loaded energy predictor", file=stderr)

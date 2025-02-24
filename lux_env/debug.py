@@ -8,5 +8,5 @@ print('Creating env')
 env = PPOEnv(opp_agent=DummyAgent)
 print('Created env')
 
-for _ in tqdm(range(1000)):
+for _ in tqdm(range(10000)):
     env.step(np.zeros((16), dtype=np.uint8))
