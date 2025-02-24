@@ -374,7 +374,7 @@ class State:
         for ship in fleet.ships:
             node = None
             if ship.node is not None:
-                ship_node = deepcopy(ship.node)
+                ship_node = ship.node
                 if needs_mirroring:
                     x, y = get_opposite(*ship_node.coordinates)
                     ship_node.x = x
@@ -394,7 +394,7 @@ class State:
             for x in range(SPACE_SIZE):
                 if self.team_id == 1:
                     x, y = get_opposite(x, y)
-                node = deepcopy(self.space.get_node(x, y))
+                node = self.space.get_node(x, y)
                 if self.team_id == 1:
                     x, y = get_opposite(*node.coordinates)
                     node.x = x
@@ -404,7 +404,7 @@ class State:
 
 
     def _get_relic_nodes(self):
-        relic_nodes = deepcopy(self.space.relic_nodes)
+        relic_nodes = self.space.relic_nodes
         if self.team_id == 1:
             for node in relic_nodes:
                 x, y = get_opposite(*node.coordinates)
@@ -414,7 +414,7 @@ class State:
 
 
     def _get_reward_nodes(self):
-        reward_nodes = deepcopy(self.space.reward_nodes)
+        reward_nodes = self.space.reward_nodes
         if self.team_id == 1:
             for node in reward_nodes:
                 x, y = get_opposite(*node.coordinates)

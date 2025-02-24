@@ -1,6 +1,6 @@
-import gym.spaces
+import gymnasium.spaces
 from luxai_s3.wrappers import LuxAIS3GymEnv
-import gym
+import gymnasium as gym
 from state.state import State
 from dummy_agent import DummyAgent
 import numpy as np

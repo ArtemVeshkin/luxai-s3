@@ -73,7 +73,7 @@ class Space:
         self.move_obstacles(step, config)
         self._update_map(obs, config)
         self._update_relic_map(step, obs, team_id, team_reward, config)
-        self.energy_predictor.predict_hidden_energy(self)
+        # self.energy_predictor.predict_hidden_energy(self)
 
 
     def _update_relic_map(self, step, obs, team_id, team_reward, config: Config):

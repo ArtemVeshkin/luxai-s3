@@ -6,34 +6,38 @@ from ppo_policy import CustomActorCriticPolicy
 import torch
 from dummy_agent import DummyAgent
 from rulebased import Rulebased
+from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.vec_env import SubprocVecEnv
 
 
-class TensorboardCallback(BaseCallback):
-    def __init__(self, verbose=0):
-        super().__init__(verbose)
 
-    def _on_step(self) -> bool:
-        # Log scalar value (here a random variable)r
-        if len(self.model.ep_info_buffer) > 0 and len(self.model.ep_info_buffer[0]) > 0:
-            self.logger.record("rollout/ep_rew_last", self.model.ep_info_buffer[-1]["r"])
-        return True
+if __name__ == '__main__':
+    class TensorboardCallback(BaseCallback):
+        def __init__(self, verbose=0):
+            super().__init__(verbose)
 
-env = PPOEnv(opp_agent=DummyAgent)
-model = PPO(
-    CustomActorCriticPolicy,
-    env,
-    gamma=1.,
-    gae_lambda=1.,
-    ent_coef=0.1,
-    learning_rate=1e-5,
-    clip_range=0.1,
-    verbose=0,
-    tensorboard_log='./tb_logs/with_global_info_points_gain_reward',
-    n_steps=100,
-    batch_size=100,
-    stats_window_size=10,
-    device='cuda'
-)
+        def _on_step(self) -> bool:
+            if len(self.model.ep_info_buffer) > 0 and len(self.model.ep_info_buffer[0]) > 0:
+                self.logger.record("rollout/ep_rew_last", self.model.ep_info_buffer[-1]["r"])
+            return True
 
-model.learn(total_timesteps=int(5 * 1e5), progress_bar=True, callback=TensorboardCallback())
-model.save("ppo_model_vs_dummy_points_gain_force_center")
+    env = make_vec_env(lambda: PPOEnv(opp_agent=DummyAgent), n_envs=32, vec_env_cls=SubprocVecEnv)
+    exp_name = 'points_gain'
+    model = PPO(
+        CustomActorCriticPolicy,
+        env,
+        gamma=1.,
+        gae_lambda=1.,
+        ent_coef=0.1,
+        learning_rate=1e-5,
+        clip_range=0.1,
+        verbose=0,
+        tensorboard_log=f'./tb_logs/{exp_name}',
+        n_steps=100,
+        batch_size=800,
+        stats_window_size=32,
+        device='cuda'
+    )
+
+    model.learn(total_timesteps=int(5 * 1e6), progress_bar=True, callback=TensorboardCallback())
+    model.save(f"./ppo_models/{exp_name}/ppo_model")
