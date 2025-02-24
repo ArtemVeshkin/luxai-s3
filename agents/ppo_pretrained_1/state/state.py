@@ -309,7 +309,8 @@ class State:
         for idx, ship in enumerate(self._get_ships(self.fleet)):
             if ship['node'] is not None:
                 x, y = ship['node'].coordinates
-                ship_masks[x, y, idx] = 1.
+                if ship['energy'] > 0:
+                    ship_masks[x, y, idx] = 1.
                 own_ships[x, y] = 1.
                 own_ships_energy[x, y] = ship['energy']
                 own_ship_is_harvesting[x, y] = float(ship['node'].reward)

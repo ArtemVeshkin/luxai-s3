@@ -40,22 +40,30 @@ class PPOEnv(gym.Env):
             'player_1': player_1_actions
         })
         
-        self.player_0_state.update(
-            obs['player_0']
-        )
-        self.player_1_state.update(
-            obs['player_1']
-        )
-        
-        # reward = self.player_0_state.points_gain if self.player_0_state.match_step != 0 else 100 * (env_reward['player_0'] - env_reward['player_1'])
-        # reward = self.player_0_state.points_gain
+        self.player_0_state.update(obs['player_0'])
+        self.player_1_state.update(obs['player_1'])
+
         p0_points = self.player_0_state.points
         p1_points = self.player_1_state.points
         points_diff = np.sqrt(np.abs(p0_points - p1_points))
-        reward = 0. if self.player_0_state.match_step != 100 else (-1 if p1_points > p0_points else 1) * points_diff
-        # print(f'match_step={self.player_0_state.match_step} p0={p0_points} p1={p1_points} reward={reward}')
+        # reward = 0. if self.player_0_state.match_step != 100 else (-1 if p1_points > p0_points else 1) * points_diff
+        # reward = 0. if self.player_0_state.match_step != 100 else np.sqrt(p0_points)
+        reward = self.player_0_state.points_gain
+        print(f'Step={self.player_0_state.step}; reward={reward}; p0_points={p0_points}; p1_points={p1_points}')
 
-        return self.player_0_state.get_obs(), reward, terminated['player_0'], truncated['player_0'], info['player_0']
+        if self.player_0_state.match_step == 100:
+            empty_actions = np.zeros((16, 3), dtype=np.int8)
+            obs, _, terminated, truncated, _ = self.env.step({
+                'player_0': empty_actions,
+                'player_1': empty_actions
+            })
+            self.player_0_state.update(obs['player_0'])
+            self.player_1_state.update(obs['player_1'])
+        
+
+        obs = self.player_0_state.get_obs() if not (terminated['player_0'] or truncated['player_0']) else self.reset()[0]
+
+        return obs, reward, terminated['player_0'], truncated['player_0'], info['player_0']
 
 
     # def render(self):
