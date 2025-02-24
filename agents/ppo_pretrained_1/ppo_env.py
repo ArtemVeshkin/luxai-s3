@@ -11,14 +11,6 @@ from sys import stderr
 class PPOEnv(gym.Env):
     def __init__(self, opp_agent=DummyAgent):
         self.env = LuxAIS3GymEnv()
-        
-        # env_params = self.env.env_params
-        # low = np.zeros((env_params.max_units, 3), dtype=np.int16)
-        # low[:, 1:] = -env_params.unit_sap_range
-        # high = np.ones((env_params.max_units, 3), dtype=np.int16) * 6
-        # high[:, 1:] = env_params.unit_sap_range
-
-        # self.action_space = gym.spaces.Box(low=low, high=high, dtype=np.int16)
         self.action_space = gym.spaces.MultiDiscrete([5] * 16)
 
         self.observation_space = gym.spaces.Box(low=-20, high=500, shape=(22 + 16 + 2, SPACE_SIZE, SPACE_SIZE), dtype=np.double)
@@ -49,7 +41,7 @@ class PPOEnv(gym.Env):
         # reward = 0. if self.player_0_state.match_step != 100 else (-1 if p1_points > p0_points else 1) * points_diff
         # reward = 0. if self.player_0_state.match_step != 100 else np.sqrt(p0_points)
         reward = self.player_0_state.points_gain
-        print(f'Step={self.player_0_state.step}; reward={reward}; p0_points={p0_points}; p1_points={p1_points}')
+        # print(f'Step={self.player_0_state.step}; reward={reward}; p0_points={p0_points}; p1_points={p1_points}')
 
         if self.player_0_state.match_step == 100:
             empty_actions = np.zeros((16, 3), dtype=np.int8)
