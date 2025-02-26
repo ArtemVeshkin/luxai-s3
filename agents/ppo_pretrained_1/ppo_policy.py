@@ -10,6 +10,8 @@ from state.base import MAX_UNITS, SPACE_SIZE
 
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from stable_baselines3 import PPO
+from copy import deepcopy
 
 
 class SELayer(nn.Module):
