@@ -11,6 +11,8 @@ tb_logs/
 pretrain_tb_logs/
 state_logs/
 exps/
+ppo_models/
+*.zip
 
 
 # Byte-compiled / optimized / DLL files
