@@ -19,6 +19,7 @@ class PPOAgent:
             ship = state.fleet.ships[ship_idx]
             if ship.node is None or ship.energy == 0:
                 continue
+
             x, y = ship.node.coordinates
             ship_predicted_actions = predicted_actions[ship_idx * 5:(ship_idx + 1) * 5]
             best_actions = np.argsort(-ship_predicted_actions)
