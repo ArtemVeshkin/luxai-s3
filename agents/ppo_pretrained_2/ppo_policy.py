@@ -307,14 +307,13 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
 
     def _build_mlp_extractor(self) -> None:
         model_param = {
-            'input_channels': 22,
+            'input_channels': 25,
             'n_res_blocks': 8,
-            'all_channel': 64,
+            'all_channel': 48,
             'n_actions': 5,
             'num_features_count': 18,
-            'ohe_features_count': 49,
-            'emb_dim': 9,
+            'cat_features_count': 14,
+            'emb_dim': 8,
             'acton_net_path': './pretrained.pt'
-            # 'acton_net_path': None
         }
         self.mlp_extractor = ActorCriticNet(model_param)
