@@ -19,6 +19,7 @@ from .base import (
 from copy import deepcopy
 import numpy as np
 from scipy.signal import convolve2d
+from sys import stderr
 
 
 def env_obs_to_dict_obs(env_obs: EnvObs):
@@ -206,7 +207,7 @@ class State:
             sap_range / 3.,
             unit_sensor_range / 2.,
             nebula_energy_reduction / 5.,
-        ])
+        ], dtype=np.float64)
 
         cat_features = np.array([
             match_step, # 101
@@ -223,17 +224,17 @@ class State:
             nebula_energy_reduction_cat, # 7
             all_relics_found, # 2
             all_rewards_found, # 2
-        ])
+        ], dtype=np.float64)
 
-        num_features_packed = np.concat([
+        num_features_packed = np.concatenate([
             num_features,
             np.zeros((SPACE_SIZE * SPACE_SIZE - len(num_features)))
-        ]).reshape((SPACE_SIZE, SPACE_SIZE))
+        ], dtype=np.float64).reshape((SPACE_SIZE, SPACE_SIZE))
 
-        cat_features_packed = np.concat([
+        cat_features_packed = np.concatenate([
             cat_features,
             np.zeros((SPACE_SIZE * SPACE_SIZE - len(cat_features)))
-        ]).reshape((SPACE_SIZE, SPACE_SIZE))
+        ], dtype=np.float64).reshape((SPACE_SIZE, SPACE_SIZE))
 
         return num_features_packed, cat_features_packed
 
