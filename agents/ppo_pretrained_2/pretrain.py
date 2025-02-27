@@ -13,6 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 from ppo_policy import ActorNet
 import torch.nn.functional as F
 from collections import defaultdict
+import torch.optim.lr_scheduler as lr_scheduler
 
 
 
@@ -20,15 +21,15 @@ from collections import defaultdict
 class Args:
     data_path: str = '/home/artemveshkin/dev/luxai-s3/state_logs'
     """Data path (state logs)"""
-    save_path: str = '/home/artemveshkin/dev/luxai-s3/agents/ppo_pretrained_1'
+    save_path: str = '/home/artemveshkin/dev/luxai-s3/agents/ppo_pretrained_2'
     """Checkpoints and logs save path"""
-    epochs: int = 50
+    epochs: int = 100
     """Epochs count"""
     batch_size: int = 512
     """Batch size"""
     n_res_blocks: int = 8
     """n_res_blocks"""
-    all_channel: int = 64
+    all_channel: int = 48
     """all_channel"""
     lr: float = 0.00001
     """lr"""
@@ -74,7 +75,7 @@ def main():
     SAVE_PATH = Path(args.save_path)
 
     batch_size = args.batch_size
-    exp_name = f'{args.n_res_blocks}_res_blocks_{args.all_channel}_all_channel_lr_{args.lr}'
+    exp_name = f'V2_{args.n_res_blocks}_res_blocks_{args.all_channel}_all_channel_lr_{args.lr}'
     # exp_name = 'debug'
 
     EXP_DIR = SAVE_PATH / 'exps' / exp_name
@@ -83,13 +84,13 @@ def main():
     tb_writer.add_custom_scalars(layout)
 
     model_params = {
-        'input_channels': 22,
+        'input_channels': 25,
         'n_res_blocks': 8,
         'all_channel': args.all_channel,
         'n_actions': 5,
         'num_features_count': 18,
-        'ohe_features_count': 49,
-        'emb_dim': 9,
+        'cat_features_count': 14,
+        'emb_dim': 8,
     }
     model = ActorNet(model_params)
 
@@ -102,6 +103,7 @@ def main():
     summary(model, input_size=(model_params['input_channels'] + 16 + 2, 24, 24))
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.9)
 
     train_loader = DataLoader(
         StatesDataset(DATA_PATH / 'train'),
@@ -274,6 +276,7 @@ def main():
             tb_writer.add_scalar(f'{metric}/train', train_metrics[metric], epoch + 1)
             tb_writer.add_scalar(f'{metric}/test', test_metrics[metric], epoch + 1)
         tb_writer.flush()
+        scheduler.step()
     
     model_save_path = EXP_DIR / 'model.pt'
     print(f'Saving model to {model_save_path}')

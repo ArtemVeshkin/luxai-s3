@@ -4,8 +4,9 @@ from torch.utils.data import Dataset
 import numpy as np
 import os
 import pickle
-from state.base import SPACE_SIZE, MAX_UNITS, RELIC_REWARD_RANGE, Config
+from state.base import SPACE_SIZE, MAX_UNITS, RELIC_REWARD_RANGE, Config, is_team_sector
 from scipy.signal import convolve2d
+from state.action_type import _DIRECTIONS
 
 
 class StatesDataset(Dataset):
@@ -67,96 +68,80 @@ class StatesDataset(Dataset):
         unit_sensor_range = config.UNIT_SENSOR_RANGE
         nebula_energy_reduction = config.NEBULA_ENERGY_REDUCTION
 
-        # OHE
-        game_num = np.zeros((5))
-        game_num[game_state['game_num']] = 1.
-        is_winning_by_games = np.zeros((2))
-        is_winning_by_games[int(our_wins > opp_wins)] = 1.
-        is_winning_by_points = np.zeros((2))
-        is_winning_by_points[int(our_points > opp_points)] = 1.
+        # cat
+        game_num = game_state['game_num']
+        is_winning_by_games = int(our_wins > opp_wins)
+        is_winning_by_points = int(our_points > opp_points)
 
-        relic_can_appear = np.zeros((2))
-        relic_can_appear[int(match_step <= 50 and game_state['game_num'] <= 2)] = 1.
+        relic_can_appear = int(match_step <= 50 and game_state['game_num'] <= 2)
 
-        move_cost_ohe = np.zeros((6))
-        move_cost_ohe[int(move_cost) - 1] = 1.
-        sap_range_ohe = np.zeros((6))
-        sap_range_ohe[int(sap_range) - 3] = 1.
-        unit_sensor_range_ohe = np.zeros((4))
-        unit_sensor_range_ohe[int(unit_sensor_range) - 1] = 1.
+        move_cost_cat = int(move_cost) - 1
+        sap_range_cat = int(sap_range) - 3
+        unit_sensor_range_cat = int(unit_sensor_range) - 1
 
         obstacles_movement_period_found = config.OBSTACLE_MOVEMENT_PERIOD_FOUND
-        obstacles_movement_period_found_ohe = np.zeros((2))
-        obstacles_movement_period_found_ohe[int(obstacles_movement_period_found)] = 1.
-        obstacles_movement_period_ohe = np.zeros((4))
+        obstacles_movement_period_cat = 0
         if obstacles_movement_period_found:
             if config.OBSTACLE_MOVEMENT_PERIOD == 40:
-                obstacles_movement_period_ohe[3] = 1.
+                obstacles_movement_period_cat = 4
             elif config.OBSTACLE_MOVEMENT_PERIOD == 20:
-                obstacles_movement_period_ohe[2] = 1.
+                obstacles_movement_period_cat = 3
             elif config.OBSTACLE_MOVEMENT_PERIOD == 10:
-                obstacles_movement_period_ohe[1] = 1.
-            else: # 6.67
-                obstacles_movement_period_ohe[0] = 1.
+                obstacles_movement_period_cat = 2
+            else:
+                obstacles_movement_period_cat = 1
 
         obstacles_movement_direction_found = config.OBSTACLE_MOVEMENT_DIRECTION_FOUND
-        obstacles_movement_direction_found_ohe = np.zeros((2))
-        obstacles_movement_direction_found_ohe[int(obstacles_movement_direction_found)] = 1.
-        obstacles_movement_direction_ohe = np.zeros((2))
+        obstacles_movement_direction_cat = 0
         if obstacles_movement_direction_found:
-            obstacles_movement_direction_ohe[int(config.OBSTACLE_MOVEMENT_DIRECTION == (1, -1))] = 1.
+            obstacles_movement_direction_cat = 1 + int(config.OBSTACLE_MOVEMENT_DIRECTION == (1, -1))
 
-        nebula_energy_reduction_ohe = np.zeros((6))
-        nebula_energy_reduction_found_ohe = np.zeros((2))
+        nebula_energy_reduction_cat = 0
         nebula_energy_reduction_found = config.NEBULA_ENERGY_REDUCTION_FOUND
-        nebula_energy_reduction_found_ohe[int(nebula_energy_reduction_found)] = 1.
         if nebula_energy_reduction_found:
             if config.NEBULA_ENERGY_REDUCTION <= 5:
-                nebula_energy_reduction_ohe[config.NEBULA_ENERGY_REDUCTION] = 1.
+                nebula_energy_reduction_cat = config.NEBULA_ENERGY_REDUCTION + 1
             if config.NEBULA_ENERGY_REDUCTION == 25:
-                nebula_energy_reduction_ohe[4] = 1.
+                nebula_energy_reduction_cat = 5
 
-        all_relics_found = np.zeros((2))
-        all_relics_found[int(config.ALL_RELICS_FOUND)] = 1.
-        all_rewards_found = np.zeros((2))
-        all_rewards_found[int(config.ALL_REWARDS_FOUND)] = 1.
+        all_relics_found = int(config.ALL_RELICS_FOUND)
+        all_rewards_found = int(config.ALL_REWARDS_FOUND)
 
         # concat features
         num_features = np.array([
-            match_step,
-            step,
+            match_step / 100.,
+            step / 500.,
             points_gain,
-            our_wins,
-            opp_wins,
-            our_points,
-            opp_points,
-            alive_ships,
-            ships_with_energy,
-            harvesting_ships,
+            our_wins / 2.,
+            opp_wins / 2.,
+            our_points / 200.,
+            opp_points / 200.,
+            alive_ships / 16.,
+            ships_with_energy / 16.,
+            harvesting_ships / 16.,
             harvesting_ships_percent,
-            found_relics_count,
-            found_rewards_count,
-            move_cost,
-            sap_cost,
-            sap_range,
-            unit_sensor_range,
-            nebula_energy_reduction,
+            found_relics_count / 3.,
+            found_rewards_count / 3.,
+            move_cost / 3.,
+            sap_cost / 30.,
+            sap_range / 3.,
+            unit_sensor_range / 2.,
+            nebula_energy_reduction / 5.,
         ])
 
-        ohe_features = np.concat([
+        cat_features = np.array([
+            match_step, # 101
+            step, # 505
             game_num, # 5
             is_winning_by_games, # 2
             is_winning_by_points, # 2
-            relic_can_appear, # 5
-            move_cost_ohe, # 6
-            sap_range_ohe, # 6
-            unit_sensor_range_ohe, # 4
-            obstacles_movement_period_found_ohe, # 2
-            obstacles_movement_period_ohe, # 4
-            obstacles_movement_direction_found_ohe, # 2
-            obstacles_movement_direction_ohe, # 2
-            nebula_energy_reduction_ohe, # 6
-            nebula_energy_reduction_found_ohe, # 2
+            relic_can_appear, # 2
+            move_cost_cat, # 6
+            sap_range_cat, # 6
+            unit_sensor_range_cat, # 4
+            obstacles_movement_period_cat, # 5
+            obstacles_movement_direction_cat, # 3
+            nebula_energy_reduction_cat, # 7
             all_relics_found, # 2
             all_rewards_found, # 2
         ])
@@ -166,12 +151,12 @@ class StatesDataset(Dataset):
             np.zeros((SPACE_SIZE * SPACE_SIZE - len(num_features)))
         ]).reshape((SPACE_SIZE, SPACE_SIZE))
 
-        ohe_features_packed = np.concat([
-            ohe_features,
-            np.zeros((SPACE_SIZE * SPACE_SIZE - len(ohe_features)))
+        cat_features_packed = np.concat([
+            cat_features,
+            np.zeros((SPACE_SIZE * SPACE_SIZE - len(cat_features)))
         ]).reshape((SPACE_SIZE, SPACE_SIZE))
 
-        return num_features_packed, ohe_features_packed
+        return num_features_packed, cat_features_packed
 
 
     def _state_to_obs(self, state: dict):
@@ -183,9 +168,12 @@ class StatesDataset(Dataset):
         is_explored_for_relic = np.zeros((SPACE_SIZE, SPACE_SIZE))
         is_explored_for_reward = np.zeros((SPACE_SIZE, SPACE_SIZE))
         real_energy = np.zeros((SPACE_SIZE, SPACE_SIZE))
-        predicted_energy = np.zeros((SPACE_SIZE, SPACE_SIZE))
         is_pos_real_energy_zone = np.zeros((SPACE_SIZE, SPACE_SIZE))
-        is_pos_predicted_energy_zone = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        is_team_sector_map = np.zeros((SPACE_SIZE, SPACE_SIZE))
+        can_go_up = np.ones((SPACE_SIZE, SPACE_SIZE))
+        can_go_right = np.ones((SPACE_SIZE, SPACE_SIZE))
+        can_go_down = np.ones((SPACE_SIZE, SPACE_SIZE))
+        can_go_left = np.ones((SPACE_SIZE, SPACE_SIZE))
 
         space_nodes = state['space']['nodes']
         for y in range(SPACE_SIZE):
@@ -199,9 +187,19 @@ class StatesDataset(Dataset):
                 is_explored_for_relic[x, y] = float(node.explored_for_relic)
                 is_explored_for_reward[x, y] = float(node.explored_for_reward)
                 real_energy[x, y] = node.energy if node.energy is not None else 0.
-                predicted_energy[x, y] = node.predicted_energy if node.predicted_energy is not None else 0.
                 is_pos_real_energy_zone[x, y] = float(node.energy is not None and (node.energy > 0))
-                is_pos_predicted_energy_zone[x, y] = float(node.predicted_energy is not None and (node.predicted_energy > 0))
+                is_team_sector_map[x, y] = float(is_team_sector(0, x, y))
+
+                for action, action_map in zip([1, 2, 3, 4], [
+                    can_go_up, can_go_right, can_go_down, can_go_left
+                ]):
+                    direction = _DIRECTIONS[action]
+                    next_x = direction[0] + x
+                    next_y = direction[1] + y
+                    if next_x > SPACE_SIZE - 1 or next_x < 0 or next_y > SPACE_SIZE - 1 or next_y < 0:
+                        action_map[x, y] = 0.
+                    elif not node.is_walkable:
+                        action_map[x, y] = 0.
 
         is_relic = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=np.int8)
         for node in state['space']['relic_nodes']:
@@ -231,8 +229,8 @@ class StatesDataset(Dataset):
             if ship['node'] is not None:
                 x, y = ship['node'].coordinates
                 ship_masks[x, y, idx] = 1.
-                own_ships[x, y] = 1.
-                own_ships_energy[x, y] = ship['energy']
+                own_ships[x, y] += 1.
+                own_ships_energy[x, y] += ship['energy']
                 own_ship_is_harvesting[x, y] = float(ship['node'].reward)
 
         opp_ships = np.zeros((SPACE_SIZE, SPACE_SIZE))
@@ -241,8 +239,8 @@ class StatesDataset(Dataset):
         for idx, ship in enumerate(state['opp_ships']):
             if ship['node'] is not None:
                 x, y = ship['node'].coordinates
-                opp_ships[x, y] = 1.
-                opp_ships_energy[x, y] = ship['energy']
+                opp_ships[x, y] += 1.
+                opp_ships_energy[x, y] += ship['energy']
                 opp_ship_is_harvesting[x, y] = float(ship['node'].reward)
 
         dist_to_center_x = np.zeros((SPACE_SIZE, SPACE_SIZE))
@@ -254,12 +252,12 @@ class StatesDataset(Dataset):
             dist_to_center_y[:, SPACE_SIZE // 2 + y] = y
             dist_to_center_y[:, SPACE_SIZE // 2 - y] = y
 
-        num_features, ohe_features = self._get_global_info_features(state)
+        num_features, cat_features = self._get_global_info_features(state)
 
         obs = np.stack([
             *[ship_masks[:, :, idx] for idx in range(MAX_UNITS)],
             num_features,
-            ohe_features,
+            cat_features,
             is_explored,
             is_visible,
             is_empty,
@@ -267,20 +265,23 @@ class StatesDataset(Dataset):
             is_asteroid,
             is_explored_for_relic,
             is_explored_for_reward,
-            real_energy,
-            predicted_energy,
+            real_energy / 10.,
             is_pos_real_energy_zone,
-            is_pos_predicted_energy_zone,
+            is_team_sector_map,
+            can_go_up,
+            can_go_right,
+            can_go_down,
+            can_go_left,
             is_relic,
             relic_area,
             is_reward,
-            dist_to_center_x,
-            dist_to_center_y,
+            dist_to_center_x / 6.,
+            dist_to_center_y / 6.,
             own_ships,
-            own_ships_energy,
+            own_ships_energy / 100.,
             own_ship_is_harvesting,
             opp_ships,
-            opp_ships_energy,
+            opp_ships_energy / 100.,
             opp_ship_is_harvesting
         ], axis=0)
 

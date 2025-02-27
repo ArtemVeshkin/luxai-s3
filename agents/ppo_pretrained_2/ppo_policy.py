@@ -91,16 +91,34 @@ class ActorNet(nn.Module):
         n_actions = model_params['n_actions']
         input_channels = model_params['input_channels']
         self.num_features_count = model_params['num_features_count']
-        self.ohe_features_count = model_params['ohe_features_count']
+        self.cat_features_count = model_params['cat_features_count']
         emb_dim = model_params['emb_dim']
 
         self.input_channels = input_channels
 
-        self.embedding_layer = nn.Linear(self.ohe_features_count, emb_dim)
-        self.conv1 = nn.Conv2d(emb_dim, emb_dim, kernel_size=1, stride=1, padding=0, bias=False)
-        self.conv2 = nn.Conv2d(self.num_features_count, self.num_features_count, kernel_size=1, stride=1, padding=0, bias=False)
-        global_channels = emb_dim + self.num_features_count
-        self.conv3 = nn.Conv2d(global_channels, global_channels, kernel_size=1, stride=1, padding=0, bias=False)
+        self.cat_embeddings = nn.ModuleList([
+            nn.Embedding(101, emb_dim, max_norm=1.0),
+            nn.Embedding(505, emb_dim, max_norm=1.0),
+            nn.Embedding(5, emb_dim, max_norm=1.0),
+            nn.Embedding(2, emb_dim, max_norm=1.0),
+            nn.Embedding(2, emb_dim, max_norm=1.0),
+            nn.Embedding(2, emb_dim, max_norm=1.0),
+            nn.Embedding(6, emb_dim, max_norm=1.0),
+            nn.Embedding(6, emb_dim, max_norm=1.0),
+            nn.Embedding(4, emb_dim, max_norm=1.0),
+            nn.Embedding(5, emb_dim, max_norm=1.0),
+            nn.Embedding(3, emb_dim, max_norm=1.0),
+            nn.Embedding(7, emb_dim, max_norm=1.0),
+            nn.Embedding(2, emb_dim, max_norm=1.0),
+            nn.Embedding(2, emb_dim, max_norm=1.0),
+        ])
+
+        self.cat_linear_layer = nn.Linear(emb_dim * 2, emb_dim)
+        self.num_linear_layer = nn.Linear(self.num_features_count, emb_dim)
+        self.cat_conv = nn.Conv2d(emb_dim, emb_dim, kernel_size=1, stride=1, padding=0, bias=False)
+        self.num_conv = nn.Conv2d(emb_dim, emb_dim, kernel_size=1, stride=1, padding=0, bias=False)
+        global_channels = emb_dim * 2
+        self.global_info_conv = nn.Conv2d(global_channels, global_channels, kernel_size=1, stride=1, padding=0, bias=False)
 
         self.input_conv1 = nn.Conv2d(input_channels + global_channels, all_channel, kernel_size=1, stride=1, padding=0, bias=False)
         self.res_blocks = nn.ModuleList([
@@ -110,11 +128,16 @@ class ActorNet(nn.Module):
 
         self.actions_conv = nn.Conv2d(all_channel, n_actions, kernel_size=1, stride=1, padding=0, bias=False)
 
-        nn.init.kaiming_normal_(self.conv1.weight)
-        nn.init.kaiming_normal_(self.conv2.weight)
-        nn.init.kaiming_normal_(self.conv3.weight)
+        nn.init.kaiming_normal_(self.cat_conv.weight)
+        nn.init.kaiming_normal_(self.num_conv.weight)
+        nn.init.kaiming_normal_(self.global_info_conv.weight)
         nn.init.kaiming_normal_(self.actions_conv.weight)
         nn.init.kaiming_normal_(self.input_conv1.weight)
+
+        for embed in self.cat_embeddings:
+            nn.init.xavier_uniform_(embed.weight)
+        nn.init.xavier_normal_(self.cat_linear_layer.weight)
+        nn.init.xavier_normal_(self.num_linear_layer.weight)
 
 
     def get_x_and_ships_mask(self, x: torch.Tensor):
@@ -139,21 +162,35 @@ class ActorNet(nn.Module):
 
     def get_global_info_embed(self, x: torch.Tensor) -> torch.Tensor:
         num_features = x[:, 0, :, :].flatten(1)[:, :self.num_features_count]
-        ohe_features = x[:, 1, :, :].flatten(1)[:, :self.ohe_features_count]
+        cat_features = x[:, 1, :, :].flatten(1)[:, :self.cat_features_count]
 
-        ohe_features = self.embedding_layer(ohe_features)
-        ohe_features = ohe_features.view(-1, ohe_features.shape[1], 1, 1).expand(-1, ohe_features.shape[1], SPACE_SIZE, SPACE_SIZE)
-        ohe_features = self.conv1(ohe_features)
-        ohe_features = F.leaky_relu(ohe_features)
+        cat_embeddings = []
+        for idx in range(self.cat_features_count):
+            cat_embeddings.append(self.cat_embeddings[idx](cat_features[:, idx].long()))
+        cat_embeddings = torch.stack(cat_embeddings, dim=1)
 
+        cat_embedding = torch.cat([
+            cat_embeddings.sum(dim=1),
+            cat_embeddings.mean(dim=1),
+        ], dim=1)
+
+        cat_embedding = self.cat_linear_layer(cat_embedding)
+        cat_embedding = cat_embedding.view(-1, cat_embedding.shape[1], 1, 1).expand(-1, cat_embedding.shape[1], SPACE_SIZE, SPACE_SIZE)
+        cat_embedding = F.leaky_relu(cat_embedding)
+        cat_embedding = self.cat_conv(cat_embedding)
+        cat_embedding = F.leaky_relu(cat_embedding)
+
+        num_features = self.num_linear_layer(num_features)
+        num_features = F.leaky_relu(num_features)
         num_features = num_features.view(-1, num_features.shape[1], 1, 1).expand(-1, num_features.shape[1], SPACE_SIZE, SPACE_SIZE)
-        num_features = self.conv2(num_features)
+        num_features = self.num_conv(num_features)
         num_features = F.leaky_relu(num_features)
 
-        global_features = torch.cat([ohe_features, num_features], dim=1)
-        global_features = self.conv3(global_features)
-        return global_features
+        global_features = torch.cat([cat_embedding, num_features], dim=1)
+        global_features = self.global_info_conv(global_features)
+        global_features = F.leaky_relu(global_features)
 
+        return global_features
 
 
     def get_embed(self, x: torch.Tensor) -> torch.Tensor:
