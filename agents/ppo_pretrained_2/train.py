@@ -34,12 +34,12 @@ if __name__ == '__main__':
         gamma=1.,
         gae_lambda=1.,
         ent_coef=0.1,
-        learning_rate=lambda progress_remaining: float(1e-5) / (2 - progress_remaining),
+        learning_rate=lambda progress_remaining: float(1e-4) / (2 - progress_remaining),
         clip_range=0.1,
         verbose=0,
         tensorboard_log=f'./tb_logs/{exp_name}',
         n_steps=100,
-        batch_size=800,
+        batch_size=1200,
         stats_window_size=n_envs,
         device='cuda'
     )

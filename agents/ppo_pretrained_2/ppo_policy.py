@@ -215,13 +215,12 @@ class ActorNet(nn.Module):
             (actions_map * ships_mask[:, :, idx:idx+1]).sum(dim=1) for idx in range(MAX_UNITS)
         ], dim=1)
 
-        force_center_mask = torch.tile(torch.Tensor([1000., 0., 0., 0., 0.,]),
-                    (result_actions_map.shape[0], MAX_UNITS)).to(torch.device(result_actions_map.device))
-        ships_mask = 1. - ships_mask.sum(dim=1, keepdim=True)
-        for ship_idx in range(MAX_UNITS):
-            force_center_mask[:, ship_idx * 5] *= ships_mask[:, 0, ship_idx]
-        result_actions_map += force_center_mask
-            
+        # force_center_mask = torch.tile(torch.Tensor([1000., 0., 0., 0., 0.,]),
+        #             (result_actions_map.shape[0], MAX_UNITS)).to(torch.device(result_actions_map.device))
+        # ships_mask = 1. - ships_mask.sum(dim=1, keepdim=True)
+        # for ship_idx in range(MAX_UNITS):
+        #     force_center_mask[:, ship_idx * 5] *= ships_mask[:, 0, ship_idx]
+        # result_actions_map += force_center_mask
 
         return result_actions_map
 

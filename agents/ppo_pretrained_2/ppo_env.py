@@ -5,15 +5,29 @@ from state.state import State
 from dummy_agent import DummyAgent
 import numpy as np
 from state.base import SPACE_SIZE, MAX_UNITS
+from state.action_type import _DIRECTIONS
 from sys import stderr
+from scipy.special import softmax
+from numpy import random
 
 
 class PPOEnv(gym.Env):
     def __init__(self, opp_agent=DummyAgent):
         self.env = LuxAIS3GymEnv()
-        self.action_space = gym.spaces.MultiDiscrete([5] * 16)
+        # self.action_space = gym.spaces.MultiDiscrete([5] * 16)
+        self.action_space = gym.spaces.Box(
+            low=-1e+9,
+            high=1e+9,
+            shape=(80,),
+            dtype=np.double
+        )
 
-        self.observation_space = gym.spaces.Box(low=-20, high=500, shape=(22 + 16 + 2, SPACE_SIZE, SPACE_SIZE), dtype=np.double)
+        self.observation_space = gym.spaces.Box(
+            low=-1e+9,
+            high=1e+9,
+            shape=(25 + 16 + 2, SPACE_SIZE, SPACE_SIZE),
+            dtype=np.double
+        )
 
         self.player_0_state = State('player_0')
         self.player_1_state = State('player_1')
@@ -22,8 +36,56 @@ class PPOEnv(gym.Env):
         self.reset()
 
 
+    @staticmethod
+    def get_actions(state: State, actions):
+        choosen_actions = np.zeros((16))
+        ships = state._get_ships(state.fleet)
+        space = state._get_space_nodes()
+        for ship_idx in range(MAX_UNITS):
+            ship = ships[ship_idx]
+            if ship['node'] is None or ship['energy'] == 0:
+                continue
+            x, y = ship['node'].coordinates
+            ship_predicted_actions = softmax(actions[5 * ship_idx:5 * (ship_idx + 1)])
+            best_actions = np.argsort(-ship_predicted_actions)
+
+            sampled_action_successfully = False
+            for _ in range(30):
+                ship_sampled_action = random.choice(list(range(5)), p=ship_predicted_actions)
+                direction = _DIRECTIONS[ship_sampled_action]
+                next_x = direction[0] + x
+                next_y = direction[1] + y
+                if next_x > 23 or next_x < 0 or next_y > 23 or next_y < 0:
+                    continue
+                if not space[next_x, next_y].is_walkable:
+                    continue
+
+                choosen_actions[ship_idx] = ship_sampled_action
+                sampled_action_successfully = True
+                break
+            
+            if sampled_action_successfully:
+                continue
+
+            for a in best_actions:
+                if a == 0 and not ship['node'].reward:
+                    continue
+                direction = _DIRECTIONS[a]
+                next_x = direction[0] + x
+                next_y = direction[1] + y
+                if next_x > 23 or next_x < 0 or next_y > 23 or next_y < 0:
+                    continue
+                if not space[next_x, next_y].is_walkable:
+                    continue
+                choosen_actions[ship_idx] = a
+                break
+
+        actions = np.array([[a, 0, 0] for a in choosen_actions], dtype=np.int8)
+        return actions
+
+
     def step(self, actions):
-        actions = np.array([[action, 0, 0] for action in actions], dtype=np.int8)
+        actions = self.get_actions(self.player_0_state, actions)
         player_1_actions = self.player_1_agent.act(
             self.player_1_state
         )
