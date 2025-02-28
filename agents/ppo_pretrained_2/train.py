@@ -24,7 +24,7 @@ if __name__ == '__main__':
 
 
     n_envs = 48
-    exp_name = 'points_gain'
+    exp_name = 'softmax_points_gain'
     env = make_vec_env(lambda: PPOEnv(opp_agent=DummyAgent), n_envs=n_envs, vec_env_cls=SubprocVecEnv)
     # env = make_vec_env(lambda: PPOEnv(opp_agent=Rulebased), n_envs=n_envs, vec_env_cls=SubprocVecEnv)
 
@@ -45,5 +45,5 @@ if __name__ == '__main__':
     )
     # model.policy = PPO.load('./ppo_models/points_gain/ppo_model').policy
 
-    model.learn(total_timesteps=int(5 * 1e6), progress_bar=True, callback=TensorboardCallback())
+    model.learn(total_timesteps=int(1.5 * 1e6), progress_bar=True, callback=TensorboardCallback())
     model.save(f"./ppo_models/{exp_name}/ppo_model")

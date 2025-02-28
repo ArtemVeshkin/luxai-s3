@@ -16,15 +16,17 @@ class PPOEnv(gym.Env):
         self.env = LuxAIS3GymEnv()
         # self.action_space = gym.spaces.MultiDiscrete([5] * 16)
         self.action_space = gym.spaces.Box(
-            low=-1e+9,
-            high=1e+9,
+            # low=-1e+2,
+            # high=1e+2,
+            low=0.,
+            high=1.,
             shape=(80,),
-            dtype=np.double
+            dtype=np.float64
         )
 
         self.observation_space = gym.spaces.Box(
-            low=-1e+9,
-            high=1e+9,
+            low=-1e+5,
+            high=1e+5,
             shape=(25 + 16 + 2, SPACE_SIZE, SPACE_SIZE),
             dtype=np.double
         )
@@ -46,12 +48,20 @@ class PPOEnv(gym.Env):
             if ship['node'] is None or ship['energy'] == 0:
                 continue
             x, y = ship['node'].coordinates
-            ship_predicted_actions = softmax(actions[5 * ship_idx:5 * (ship_idx + 1)])
+            # ship_predicted_actions = softmax(actions[5 * ship_idx:5 * (ship_idx + 1)])
+            prob_sum = actions[5 * ship_idx:5 * (ship_idx + 1)].sum()
+            if prob_sum > 0:
+                ship_predicted_actions = actions[5 * ship_idx:5 * (ship_idx + 1)] / prob_sum
+            else:
+                ship_predicted_actions = np.array([0.2] * 5)
             best_actions = np.argsort(-ship_predicted_actions)
 
             sampled_action_successfully = False
             for _ in range(30):
-                ship_sampled_action = random.choice(list(range(5)), p=ship_predicted_actions)
+                try:
+                    ship_sampled_action = random.choice(list(range(5)), p=ship_predicted_actions)
+                except ValueError as e:
+                    print(f'actions={actions[5 * ship_idx:5 * (ship_idx + 1)]}, prob_sum={prob_sum}, normed={ship_predicted_actions}')
                 direction = _DIRECTIONS[ship_sampled_action]
                 next_x = direction[0] + x
                 next_y = direction[1] + y

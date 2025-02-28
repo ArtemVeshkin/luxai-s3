@@ -251,6 +251,12 @@ class ActorCriticNet(nn.Module):
         self.critic_fc = nn.Linear(self.all_channel, 1)
         nn.init.xavier_normal_(self.critic_fc.weight)
 
+    
+    def get_action_probs(self, x: torch.Tensor):
+        for ship_idx in range(MAX_UNITS):
+            x[:, ship_idx * 5:(ship_idx + 1) * 5] = F.softmax(x[:, ship_idx * 5:(ship_idx + 1) * 5], dim=1)
+        return x
+
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -264,11 +270,14 @@ class ActorCriticNet(nn.Module):
         critic_x = torch.flatten(x, start_dim=-2, end_dim=-1).sum(dim=-1) / (24 * 24)
         critic_value = self.critic_fc(critic_x.view(-1, self.all_channel)).view(-1)
 
-        return fleet_actions, critic_value
+        fleet_action_probs = self.get_action_probs(fleet_actions)
+        return fleet_action_probs, critic_value
 
 
     def forward_actor(self, x: torch.Tensor) -> torch.Tensor:
-        return self.actor_net(x)
+        actor_out = self.actor_net(x)
+        actor_out_probs = self.get_action_probs(actor_out)
+        return actor_out_probs
 
 
     def forward_critic(self, x: torch.Tensor) -> torch.Tensor:
