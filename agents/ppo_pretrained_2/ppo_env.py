@@ -15,6 +15,7 @@ class PPOEnv(gym.Env):
     def __init__(self, opp_agent=DummyAgent):
         self.env = LuxAIS3GymEnv()
         # self.action_space = gym.spaces.MultiDiscrete([5] * 16)
+        self.n_rounds = 1
         self.action_space = gym.spaces.Box(
             # low=-1e+2,
             # high=1e+2,
@@ -123,11 +124,15 @@ class PPOEnv(gym.Env):
             })
             self.player_0_state.update(obs['player_0'])
             self.player_1_state.update(obs['player_1'])
+        terminated = terminated['player_0']
+        truncated = truncated['player_0']
         
+        if (self.player_0_state.step // 101) >= self.n_rounds:
+            terminated = True
 
-        obs = self.player_0_state.get_obs() if not (terminated['player_0'] or truncated['player_0']) else self.reset()[0]
+        obs = self.player_0_state.get_obs() if not (terminated or truncated) else self.reset()[0]
 
-        return obs, reward, terminated['player_0'], truncated['player_0'], info['player_0']
+        return obs, reward, terminated, truncated, info['player_0']
 
 
     # def render(self):
