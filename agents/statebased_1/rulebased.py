@@ -35,8 +35,7 @@ class Rulebased:
         
         self.find_relics(state)
         self.find_rewards(state)
-        self.old_harvest(state)
-        # self.harvest()
+        self.harvest(state)
         self.fight(state)
         self.employ_unemployed(state)
         self.harvest_if_losing(state)
@@ -266,7 +265,7 @@ class Rulebased:
         return relic_nodes
 
 
-    def old_harvest(self, state: State):
+    def harvest(self, state: State):
 
         def set_task(ship, target_node):
             if ship.node == target_node:
@@ -376,55 +375,6 @@ class Rulebased:
             return path_len, actions[0]
 
         return None, None
-
-
-    def harvest(self, state: State):
-        space_weights = create_weights(state.space, state.config.ALL_REWARDS_FOUND, state.config.NEBULA_ENERGY_REDUCTION)
-        booked_nodes = set()
-        for ship in state.fleet:
-            if ship.task == 'harvest':
-                relevance, action = self._ship_relevance_to_node(ship, ship.target, space_weights, state)
-                if relevance is None:
-                    ship.task = None
-                    ship.target = None
-                    ship.action = ActionType.center
-                else:
-                    booked_nodes.add(ship.target)
-                    ship.action = action
-
-
-        remaining_ship_indices = set(
-            ship_idx for ship_idx, ship in enumerate(state.fleet.ships)
-            if ship.node is not None and ship.task is None
-        )
-
-        sorted_reward_nodes = self._get_sorter_rewards(space_weights, remaining_ship_indices, state)
-        for reward_node in sorted_reward_nodes:
-            if reward_node in booked_nodes:
-                continue
-
-            ship_relevances = [None] * MAX_UNITS
-            ship_actions = [None] * MAX_UNITS
-            for ship_idx in remaining_ship_indices:
-                ship = state.fleet.ships[ship_idx]
-                ship_relevances[ship_idx], ship_actions[ship_idx] = self._ship_relevance_to_node(ship, reward_node, space_weights, state)
-
-            best_ship_idx = None
-            for ship_idx in remaining_ship_indices:
-                if ship_relevances[ship_idx] is not None:
-                    if best_ship_idx is None:
-                        best_ship_idx = ship_idx
-
-                    if ship_relevances[ship_idx] <= ship_relevances[best_ship_idx]:
-                        if state.fleet.ships[ship_idx].energy < state.fleet.ships[best_ship_idx].energy:
-                            best_ship_idx = ship_idx
-
-            if best_ship_idx is not None:
-                best_ship = state.fleet.ships[best_ship_idx]
-                best_ship.target = reward_node
-                best_ship.task = "harvest"
-                best_ship.action = ship_actions[best_ship_idx]
-                remaining_ship_indices.remove(best_ship_idx)
 
 
     def harvest_if_losing(self, state: State):
