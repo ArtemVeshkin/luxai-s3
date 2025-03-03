@@ -1,4 +1,4 @@
-from state.state import State
+from state.state import State, MAX_UNITS
 from stable_baselines3 import PPO
 import numpy as np
 from sys import stderr
@@ -14,51 +14,65 @@ class PPOAgent:
 
     def act(self, state: State):
         obs = torch.Tensor(np.array([state.get_obs()]))
-        dist = self.ppo_model.policy.get_distribution(obs)
-        actions_dist = torch.stack([d.probs for d in dist.distribution], dim=1).detach().numpy()[0].flatten()
-        # predicted_actions = self.ppo_model.policy.mlp_extractor.forward_actor(obs).detach().numpy()[0]
-        # print(f'{actions_dist[0:5]} {predicted_actions[0:5]}', file=stderr)
+        actions = self.ppo_model.predict(obs)[0][0]
+        # print(self.ppo_model.policy.mlp_extractor.actor_net(obs)[0], file=stderr)
+        
+        return self.get_actions(state, actions)
+    
+
+    @staticmethod
+    def get_actions(state: State, actions):
         choosen_actions = np.zeros((16))
         ships = state._get_ships(state.fleet)
         space = state._get_space_nodes()
-        for ship_idx in range(16):
+        for ship_idx in range(MAX_UNITS):
             ship = ships[ship_idx]
             if ship['node'] is None or ship['energy'] == 0:
                 continue
-
             x, y = ship['node'].coordinates
-            ship_actions_dist = actions_dist[ship_idx * 5:(ship_idx + 1) * 5]
-            # ship_predicted_actions = predicted_actions[ship_idx * 5:(ship_idx + 1) * 5]
-            # best_actions = np.argsort(-ship_predicted_actions)
-            for a in range(5):
+            # ship_predicted_actions = softmax(actions[5 * ship_idx:5 * (ship_idx + 1)])
+            cur_ship_actions = actions[5 * ship_idx:5 * (ship_idx + 1)]
+            cur_ship_actions -= cur_ship_actions.min()
+            prob_sum = cur_ship_actions.sum()
+            if prob_sum > 0:
+                ship_predicted_actions = cur_ship_actions / prob_sum
+            else:
+                ship_predicted_actions = np.array([0.2] * 5)
+            best_actions = np.argsort(-ship_predicted_actions)
+
+            sampled_action_successfully = False
+            for _ in range(30):
+                try:
+                    ship_sampled_action = random.choice(list(range(5)), p=ship_predicted_actions)
+                except ValueError as e:
+                    print(f'ship_predicted_actions={ship_predicted_actions}, prob_sum={prob_sum}, cur_ship_actions={cur_ship_actions}', file=stderr)
+                direction = _DIRECTIONS[ship_sampled_action]
+                next_x = direction[0] + x
+                next_y = direction[1] + y
+                if next_x > 23 or next_x < 0 or next_y > 23 or next_y < 0:
+                    continue
+                if not space[next_x, next_y].is_walkable:
+                    continue
+
+                choosen_actions[ship_idx] = ship_sampled_action
+                sampled_action_successfully = True
+                break
+            
+            if sampled_action_successfully:
+                continue
+
+            for a in best_actions:
+                if a == 0 and not ship['node'].reward:
+                    continue
                 direction = _DIRECTIONS[a]
                 next_x = direction[0] + x
                 next_y = direction[1] + y
                 if next_x > 23 or next_x < 0 or next_y > 23 or next_y < 0:
-                    ship_actions_dist[a] = 0.
-                elif not space[next_x, next_y].is_walkable:
-                    ship_actions_dist[a] = 0.
-            # ship_actions_dist[ship_actions_dist < 1e-9] = 0.
-            prob_sum = np.sum(ship_actions_dist)
-            if prob_sum < 1e-12:
-                continue
-            ship_actions_dist /= prob_sum
-            ship_action = random.choice(list(range(5)), p=ship_actions_dist)
-            # print(f'{ship_actions_dist} {ship_action}', file=stderr)
-            choosen_actions[ship_idx] = ship_action
+                    continue
+                if not space[next_x, next_y].is_walkable:
+                    continue
+                choosen_actions[ship_idx] = a
+                break
 
-            # for a in best_actions:
-            #     if a == 0 and not ship['node'].reward:
-            #         continue
-            #     direction = _DIRECTIONS[a]
-            #     next_x = direction[0] + x
-            #     next_y = direction[1] + y
-            #     if next_x > 23 or next_x < 0 or next_y > 23 or next_y < 0:
-            #         continue
-            #     if not space[next_x, next_y].is_walkable:
-            #         continue
-            #     choosen_actions[ship_idx] = a
-            #     break
-
-        action = np.array([[a, 0, 0] for a in choosen_actions], dtype=np.int8)
-        return action
+        actions = np.array([[a, 0, 0] for a in choosen_actions], dtype=np.int8)
+        return actions
