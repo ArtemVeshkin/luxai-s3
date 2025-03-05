@@ -31,6 +31,57 @@ class Args:
     """Run matches or only calculate metrics"""
 
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
+def run_single_match(run_idx, agent1_name, agent2_name, SCRIPT_DIR):
+    """Run one match and return 1 if agent2 wins, 0 otherwise."""
+    change_agents_order = random.choice((True, False))
+    output_file = SCRIPT_DIR / "runs" / f"{run_idx}.json"
+
+    subprocess.run((
+        'luxai-s3',
+        str(SCRIPT_DIR / (agent2_name if change_agents_order else agent1_name) / "main.py"),
+        str(SCRIPT_DIR / (agent1_name if change_agents_order else agent2_name) / "main.py"),
+        f'--seed={run_idx}',
+        f'--output={output_file}'
+    ))
+
+    with open(output_file, 'r') as fh:
+        game_results_json = json.load(fh)
+        team_wins = game_results_json['observations'][505]['team_wins']
+        # Ensure that team wins order is correct
+        player_0 = game_results_json['metadata']['players']['player_0'].split('/')[-2]
+        if player_0 != agent1_name:
+            team_wins = team_wins[::-1]
+
+    # Return 1 if agent2 wins, otherwise 0.
+    return 1 if team_wins[1] > team_wins[0] else 0
+
+
+def run_matches(n_runs, agent1_name, agent2_name, SCRIPT_DIR, max_workers=4):
+    """Run all matches concurrently and return the total wins for agent2."""
+    print("Running matches")
+    clear_and_create_dir(SCRIPT_DIR / 'runs')
+
+    total_wins = 0
+    completed_matches = 0
+    futures = []
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all match runs concurrently.
+        futures = [executor.submit(run_single_match, run_idx, agent1_name, agent2_name, SCRIPT_DIR)
+                   for run_idx in range(n_runs)]
+
+        # Use as_completed to update progress and accumulate wins.
+        for future in tqdm(as_completed(futures), total=n_runs):
+            total_wins += future.result()
+            completed_matches += 1
+            print(f'Cur winrate = {100 * total_wins / completed_matches:.1f}%')
+
+    return total_wins
+
+
 def main():
     args = tyro.cli(Args)
     agent1_name = args.agent1
@@ -47,30 +98,9 @@ def main():
     prepare_agent_folder(SCRIPT_DIR / agent2_name, AGENT2_DIR)
 
     if args.run_matches:
-        # run matches
-        print("Running matches")
-        clear_and_create_dir(SCRIPT_DIR / 'runs')
-        cur_won_matches = 0
-        for run_idx in tqdm(range(args.n_runs)):
-            change_agents_order = random.choice((True, False))
-            subprocess.run((
-                'luxai-s3',
-                SCRIPT_DIR / (agent2_name if change_agents_order else agent1_name) / "main.py",
-                SCRIPT_DIR / (agent1_name if change_agents_order else agent2_name) / "main.py",
-                f'--seed={run_idx}',
-                f'--output={SCRIPT_DIR / "runs" / (str(run_idx) + ".json")}'
-            ))
-
-            with open(SCRIPT_DIR / 'runs' / f'{run_idx}.json', 'r') as fh:
-                game_results_json = json.load(fh)
-                team_wins = game_results_json['observations'][505]['team_wins']
-                player_0 = game_results_json['metadata']['players']['player_0'].split('/')[-2]
-                if not (player_0 == agent1_name):
-                    team_wins = team_wins[::-1]
-                if team_wins[1] > team_wins[0]:
-                    cur_won_matches += 1
-            
-            print(f'Cur winrate = {100 * cur_won_matches / (run_idx + 1):.1f}%')
+        total_wins = run_matches(args.n_runs, agent1_name, agent2_name, SCRIPT_DIR, max_workers=8)
+        final_winrate = 100 * total_wins / args.n_runs
+        print(f'Final winrate = {final_winrate:.1f}%')
 
     # calc metrics
     print("Calculating metrics")
