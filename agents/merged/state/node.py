@@ -23,6 +23,7 @@ class Node:
         self.predicted_energy = None
         self.is_visible = False
         self.visited_times = 0
+        self.is_enemy = False
 
         self._relic = False
         self._reward = False

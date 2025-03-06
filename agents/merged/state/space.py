@@ -71,7 +71,7 @@ class Space:
 
     def update(self, step, obs: EnvObs, team_id, team_reward, config: Config):
         self.move_obstacles(step, config)
-        self._update_map(obs, config)
+        self._update_map(obs, config, team_id)
         self._update_relic_map(step, obs, team_id, team_reward, config)
         self.energy_predictor.predict_hidden_energy(self)
 
@@ -224,10 +224,11 @@ class Space:
             self._reward_nodes.add(node)
             self._reward_nodes.add(opp_node)
 
-    def _update_map(self, obs: EnvObs, config: Config):
+    def _update_map(self, obs: EnvObs, config: Config, team_id):
         sensor_mask = obs["sensor_mask"]
         obs_energy = obs["map_features"]["energy"]
         obs_tile_type = obs["map_features"]["tile_type"]
+        enemies = obs["units"]["position"][abs(team_id - 1)]
 
         obstacles_shifted = False
         energy_nodes_shifted = False
@@ -250,6 +251,7 @@ class Space:
                 energy_nodes_shifted = True
 
         config.OBSTACLES_MOVEMENT_STATUS.append(obstacles_shifted)
+        config.ENERGY_NODES_MOVEMENT_STATUS.append(energy_nodes_shifted)
 
         def clear_map_info():
             for n in self:
@@ -264,6 +266,16 @@ class Space:
                 self.move(*config.OBSTACLE_MOVEMENT_DIRECTION, inplace=True)
             else:
                 clear_map_info()
+
+
+        if not config.ENERGY_NODE_MOVEMENT_PERIOD_FOUND:
+            period = self._find_energy_movement_period(
+                config.ENERGY_NODES_MOVEMENT_STATUS
+            )
+            if period is not None:
+                config.ENERGY_NODE_MOVEMENT_PERIOD_FOUND = True
+                config.ENERGY_NODE_MOVEMENT_PERIOD = period
+
 
         if not config.OBSTACLE_MOVEMENT_PERIOD_FOUND:
             period = self._find_obstacle_movement_period(
@@ -296,6 +308,13 @@ class Space:
             x, y = node.coordinates
             is_visible = bool(sensor_mask[x, y])
 
+            # update enemies
+            if any(map(lambda coord: coord[0] == x and coord[1] == y, enemies)):
+                node.is_enemy = True
+                # print('Spotted enemy')
+            else:
+                node.is_enemy = False
+
             node.is_visible = is_visible
 
             if is_visible and node.is_unknown:
@@ -326,6 +345,20 @@ class Space:
             return 10
         else:
             return 20 / 3
+        
+    @staticmethod
+    def _find_energy_movement_period(energies_movement_status):
+        if sum(energies_movement_status) >= 2:
+            first = None
+            second = None
+            for idx, i in enumerate(energies_movement_status):
+                if i and first is None:
+                    first = idx
+                elif i and first and second is None:
+                    second = idx
+            return second - first
+        else:
+            return None
 
     def _find_obstacle_movement_direction(self, obs):
         sensor_mask = obs["sensor_mask"]

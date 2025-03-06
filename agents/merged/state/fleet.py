@@ -35,8 +35,11 @@ class Fleet:
             obs["units"]["position"][self.team_id],
             obs["units"]["energy"][self.team_id],
         ):
+            ship.active = active
             if active:
                 ship.node = space.get_node(*position)
+                ship.track.append(position)
+                ship.action_sap_info = (0, 0)
                 if ship.node.type == NodeType.nebula and not config.NEBULA_ENERGY_REDUCTION_FOUND:
                     if ship.node.energy is not None:
                         nebula_energy_reduction = ship.energy + ship.node.energy - config.UNIT_MOVE_COST - int(energy)

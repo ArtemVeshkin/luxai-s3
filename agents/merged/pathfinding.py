@@ -16,7 +16,11 @@ def astar(weights, start, goal):
     # A* algorithm
     # returns the shortest path form start to goal
 
-    min_weight = weights[np.where(weights >= 0)].min()
+    applicable_weighs = weights[np.where(weights >= 0)]
+    if len(applicable_weighs) > 0:
+        min_weight = applicable_weighs.min()
+    else:
+        return []
 
     def heuristic(p1, p2):
         return min_weight * manhattan_distance(p1, p2)
@@ -88,17 +92,24 @@ def nearby_positions(x, y, distance):
             yield x_, y_
 
 
-def create_weights(space, all_rewards_found, nebula_energy_reduction):
+def create_weights(space, all_rewards_found, nebula_energy_reduction, coords=None, max_dist=None, energy_update_in=None):
     # create weights for AStar algorithm
 
-    weights = np.zeros((SPACE_SIZE, SPACE_SIZE), np.float32)
+    weights = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=np.float32)
     for node in space:
 
-        if not node.is_walkable:
+        distance = manhattan_distance(coords, node.coordinates) if coords else None
+        if distance is not None and max_dist is not None and distance > max_dist:
+            weight = -1
+        elif not node.is_walkable:
             weight = -1
         else:
             node_energy = node.predicted_energy
             if node_energy is None:
+                node_energy = HIDDEN_NODE_ENERGY
+    
+            node_energy = node.predicted_energy if node.predicted_energy is not None else HIDDEN_NODE_ENERGY
+            if distance is not None and energy_update_in is not None and distance > energy_update_in:
                 node_energy = HIDDEN_NODE_ENERGY
 
             # pathfinding can't deal with negative weight
@@ -108,7 +119,7 @@ def create_weights(space, all_rewards_found, nebula_energy_reduction):
         if node.type == NodeType.nebula:
             weight += nebula_energy_reduction * 3
 
-        weights[node.y][node.x] = weight
+        weights[node.y, node.x] = weight
 
     return weights
 

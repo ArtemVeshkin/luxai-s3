@@ -4,11 +4,12 @@ from state.base import (
     is_team_sector,
     RELIC_REWARD_RANGE,
     MAX_UNITS,
-    MAX_STEPS_IN_MATCH
+    MAX_STEPS_IN_MATCH,
+    SPACE_SIZE
 )
 from state.space import Space
 from state.fleet import Fleet
-from state.node import Node
+from state.node import Node, NodeType
 from state.action_type import ActionType
 from state.ship import Ship
 from pathfinding import (
@@ -36,14 +37,14 @@ class Rulebased:
         self.find_relics(state)
         self.find_rewards(state)
         self.harvest(state)
-        self.fight(state)
+        # self.fight(state)
+        self.destroy(state)
+        self.estimate_nebula_energy(state)
         self.employ_unemployed(state)
         self.harvest_if_losing(state)
         self.optimize_harvesting(state)
 
         return self.create_actions_array(state)
-
-    
 
     def create_actions_array(self, state: State):
         ships = state.fleet.ships
@@ -51,11 +52,57 @@ class Rulebased:
 
         for i, ship in enumerate(ships):
             if ship.action is not None:
-                sap_x, sap_y = ship.sap_direction if ship.action == ActionType.sap else (0, 0)
-                actions[i] = ship.action, sap_x, sap_y
-                ship.sap_direction = (0, 0)
+                if ship.action == ActionType.sap:
+                    # print("Sapping to", ship.action, ship.action_sap_info[0], ship.action_sap_info[1])
+                    actions[i] = ship.action, int(ship.action_sap_info[0]), int(ship.action_sap_info[1])
+                else:
+                    # print("Action", ship.action)
+                    actions[i] = ship.action, 0, 0
 
         return actions
+
+
+    def estimate_nebula_energy(self, state: State):
+        ships = state.fleet.ships
+        for ship in ships:
+            if ship.active:
+                ship.projected_energy = self.project_energy(ship, state)
+
+
+    def project_energy(self, ship: Ship, state: State):
+        # get needed info
+        ship_coords = ship.coordinates
+        direction = ship.action.to_direction() if ship.action else (0, 0)
+        cur_tile = state.space.get_node(ship_coords[0], ship_coords[1])
+        target_tile = state.space.get_node(ship_coords[0] + direction[0],
+                                          ship_coords[1] + direction[1])
+        cur_tile_energy = cur_tile.energy
+
+        # ship steps from nebula on empty or oposite
+        if (cur_tile.type == NodeType.nebula):  # is not (ship.prev_node_type == NodeType.nebula)
+            nebula_diff = True
+        else:
+            nebula_diff = False
+
+        if nebula_diff and not state.config.ENERGY_NODES_MOVEMENT_STATUS[-1] and not state.config.OBSTACLES_MOVEMENT_STATUS[-1]:
+            if not ship.expected_is_enemy and len(ship.track) > 0 and len(ship.energies) > 0 and ship.energy != 0:
+                move_cost = (0 if ship.track[-1][0] == ship_coords[0] and ship.track[-1][1] == ship_coords[
+                    1] else state.config.UNIT_MOVE_COST)
+                est = ship.energy - ship.energies[-1] - cur_tile_energy + move_cost
+                if sum(state.config.NEBULA_ENERGY_REDUCTION_SAMPLES.values()) < 10:
+                    state.config.NEBULA_ENERGY_REDUCTION_SAMPLES.update([est])
+
+        # update ship logs
+        ship.energies.append(ship.energy)
+        ship.track.append(ship_coords)
+        # ship.predicted_energies.append(predicted_energy)
+
+        ship.expected_is_enemy = target_tile.is_enemy
+        ship.prev_node_type = cur_tile.type
+        ship.prev_node_energy = cur_tile_energy
+
+        return cur_tile_energy
+
 
     def employ_unemployed(self, state: State):
         unexplored_relics = self.get_unexplored_relics(state)
@@ -74,7 +121,14 @@ class Rulebased:
             target, _ = find_closest_target(ship.coordinates, targets)
             if not target:
                 return
-            path = astar(create_weights(state.space, state.config.ALL_REWARDS_FOUND, state.config.NEBULA_ENERGY_REDUCTION), ship.coordinates, target)
+            path = astar(create_weights(
+                state.space,
+                state.config.ALL_REWARDS_FOUND,
+                state.config.NEBULA_ENERGY_REDUCTION,
+                ship.coordinates,
+                max_dist=MAX_STEPS_IN_MATCH + 1 - state.match_step,
+                energy_update_in=state.match_step % state.config.ENERGY_NODE_MOVEMENT_PERIOD + 1
+            ), ship.coordinates, target)
             energy = estimate_energy_cost(state.space, path, state.config.NEBULA_ENERGY_REDUCTION, state.config.UNIT_MOVE_COST)
             actions = path_to_actions(path)
             if actions and ship.energy >= energy:
@@ -90,7 +144,14 @@ class Rulebased:
                                                 if rew.is_walkable and rew.coordinates not in ship_coords])
             if not target:
                 return
-            path = astar(create_weights(state.space, state.config.ALL_REWARDS_FOUND, state.config.NEBULA_ENERGY_REDUCTION), ship.coordinates, target)
+            path = astar(create_weights(
+                state.space,
+                state.config.ALL_REWARDS_FOUND,
+                state.config.NEBULA_ENERGY_REDUCTION,
+                ship.coordinates,
+                max_dist=MAX_STEPS_IN_MATCH + 1 - state.match_step,
+                energy_update_in=state.match_step % state.config.ENERGY_NODE_MOVEMENT_PERIOD + 1
+            ), ship.coordinates, target)
             energy = estimate_energy_cost(state.space, path, state.config.NEBULA_ENERGY_REDUCTION, state.config.UNIT_MOVE_COST)
             actions = path_to_actions(path)
             if actions and ship.energy >= energy:
@@ -125,7 +186,14 @@ class Rulebased:
             if not target:
                 return False
 
-            path = astar(create_weights(state.space, state.config.ALL_REWARDS_FOUND, state.config.NEBULA_ENERGY_REDUCTION), ship.coordinates, target)
+            path = astar(create_weights(
+                state.space,
+                state.config.ALL_REWARDS_FOUND,
+                state.config.NEBULA_ENERGY_REDUCTION,
+                ship.coordinates,
+                max_dist=MAX_STEPS_IN_MATCH + 1 - state.match_step,
+                energy_update_in=state.match_step % state.config.ENERGY_NODE_MOVEMENT_PERIOD + 1
+            ), ship.coordinates, target)
             energy = estimate_energy_cost(state.space, path, state.config.NEBULA_ENERGY_REDUCTION, state.config.UNIT_MOVE_COST)
             actions = path_to_actions(path)
             if actions and ship.energy >= energy:
@@ -219,7 +287,14 @@ class Rulebased:
             if not target:
                 return
 
-            path = astar(create_weights(state.space, state.config.ALL_REWARDS_FOUND, state.config.NEBULA_ENERGY_REDUCTION), ship.coordinates, target)
+            path = astar(create_weights(
+                state.space,
+                state.config.ALL_REWARDS_FOUND,
+                state.config.NEBULA_ENERGY_REDUCTION,
+                ship.coordinates,
+                max_dist=MAX_STEPS_IN_MATCH + 1 - state.match_step,
+                energy_update_in=state.match_step % state.config.ENERGY_NODE_MOVEMENT_PERIOD + 1
+            ), ship.coordinates, target)
             energy = estimate_energy_cost(state.space, path, state.config.NEBULA_ENERGY_REDUCTION, state.config.UNIT_MOVE_COST)
             actions = path_to_actions(path)
 
@@ -338,13 +413,21 @@ class Rulebased:
         return ships_centroid_pos
 
 
-    def _get_sorter_rewards(self, space_weights, remaining_ship_indices, state: State):
-        remaining_ships_centroid_pos = self._get_ships_centroid(remaining_ship_indices, state)
+    def _get_sorter_rewards(self, remaining_ship_indices, state: State):
+        remaining_ships_centroid_pos = tuple(self._get_ships_centroid(remaining_ship_indices, state))
 
         def rewards_sort_key(reward_node: Node):
+            space_weights = create_weights(
+                state.space,
+                state.config.ALL_REWARDS_FOUND,
+                state.config.NEBULA_ENERGY_REDUCTION,
+                remaining_ships_centroid_pos,
+                max_dist=MAX_STEPS_IN_MATCH + 1 - state.match_step,
+                energy_update_in=state.match_step % state.config.ENERGY_NODE_MOVEMENT_PERIOD + 1
+            )
             path = astar(
                 space_weights,
-                start=tuple(remaining_ships_centroid_pos),
+                start=remaining_ships_centroid_pos,
                 goal=reward_node.coordinates,
             )
             actions = path_to_actions(path)
@@ -359,10 +442,18 @@ class Rulebased:
         return sorted_reward_nodes
     
 
-    def _ship_relevance_to_node(self, ship: Ship, node: Node, space_weights, state: State):
+    def _ship_relevance_to_node(self, ship: Ship, node: Node, state: State):
         if node.coordinates == ship.coordinates:
             return 0, ActionType.center
 
+        space_weights = create_weights(
+            state.space,
+            state.config.ALL_REWARDS_FOUND,
+            state.config.NEBULA_ENERGY_REDUCTION,
+            ship.coordinates,
+            max_dist=MAX_STEPS_IN_MATCH + 1 - state.match_step,
+            energy_update_in=state.match_step % state.config.ENERGY_NODE_MOVEMENT_PERIOD + 1
+        )
         path = astar(
             space_weights,
             start=ship.coordinates,
@@ -393,7 +484,6 @@ class Rulebased:
 
             missing_harvesters = int((opp_predicted_points - predicted_points) / remaining_steps) + 1
 
-            space_weights = create_weights(state.space, state.config.ALL_REWARDS_FOUND, state.config.NEBULA_ENERGY_REDUCTION)
             booked_nodes = set()
             for ship in state.fleet:
                 if ship.task == 'harvest':
@@ -404,7 +494,7 @@ class Rulebased:
                 if ship.node is not None and ship.task != 'harvest'
             )
 
-            sorted_reward_nodes = self._get_sorter_rewards(space_weights, remaining_ship_indices, state)
+            sorted_reward_nodes = self._get_sorter_rewards(remaining_ship_indices, state)
             new_harvesters = []
             for reward_node in sorted_reward_nodes:
                 if reward_node in booked_nodes:
@@ -414,7 +504,7 @@ class Rulebased:
                 ship_actions = [None] * MAX_UNITS
                 for ship_idx in remaining_ship_indices:
                     ship = state.fleet.ships[ship_idx]
-                    ship_relevances[ship_idx], ship_actions[ship_idx] = self._ship_relevance_to_node(ship, reward_node, space_weights, state)
+                    ship_relevances[ship_idx], ship_actions[ship_idx] = self._ship_relevance_to_node(ship, reward_node, state)
 
                 best_ship_idx = None
                 for ship_idx in remaining_ship_indices:
@@ -446,11 +536,18 @@ class Rulebased:
             ship for ship in state.fleet
             if ship.task == 'harvest' and ship.action in (ActionType.center, ActionType.sap) and ship.target == ship.node
         ]
-        space_weights = create_weights(state.space, state.config.ALL_REWARDS_FOUND, state.config.NEBULA_ENERGY_REDUCTION)
         for ship in state.fleet:
             if ship not in cur_harvesting_ships and ship.task == 'harvest' and ship.action not in (ActionType.center, ActionType.sap):
                 for cur_harvesting_ship in cur_harvesting_ships:
                     if ship.next_coords() == cur_harvesting_ship.coordinates and cur_harvesting_ship.energy > state.config.UNIT_MOVE_COST:
+                        space_weights = create_weights(
+                            state.space,
+                            state.config.ALL_REWARDS_FOUND,
+                            state.config.NEBULA_ENERGY_REDUCTION,
+                            ship.coordinates,
+                            max_dist=MAX_STEPS_IN_MATCH + 1 - state.match_step,
+                            energy_update_in=state.match_step % state.config.ENERGY_NODE_MOVEMENT_PERIOD + 1
+                        )
                         path = astar(
                             space_weights,
                             start=ship.coordinates,
@@ -498,3 +595,98 @@ class Rulebased:
                                     ship.sap_direction = (best_target[0] - ship.node.x, best_target[1] - ship.node.y)
                                     ship.action = ActionType.sap
                                     break
+
+
+    def destroy(self, state: State):
+        def get_sap_score(target_node: Node, forward_shooting=True):
+            """
+            Compute a score for a sap action on the target_node based on the following rules:
+
+            - The sap action costs UNIT_SAP_COST energy.
+            - On the target tile:
+                * Each enemy ship hit restores (or adds) UNIT_SAP_COST benefit.
+                * If no enemy ship is hit, the action suffers a penalty of UNIT_SAP_COST.
+                * Each allied ship hit incurs a penalty of UNIT_SAP_COST.
+            - On each of the 8 adjacent tiles:
+                * Each enemy ship hit adds a benefit of UNIT_SAP_COST * UNIT_SAP_DROPOFF_FACTOR.
+                * Each allied ship hit incurs a penalty of UNIT_SAP_COST * UNIT_SAP_DROPOFF_FACTOR.
+
+            Depending on the forward_shooting flag:
+            - If True: enemy positions are predicted based on their last movement (projected positions).
+            - If False: enemy positions are taken from their current coordinates.
+
+            This function relies solely on coordinate matching and does not check node properties.
+            """
+            base_cost = state.config.UNIT_SAP_COST
+            splash_cost = state.config.UNIT_SAP_COST * state.config.UNIT_SAP_DROPOFF_FACTOR
+            score = 0
+            target_coords = target_node.coordinates
+
+            # Gather allied positions from our fleet.
+            allied_positions = [ship.coordinates for ship in state.fleet]
+
+            def predict_ship_position(ship):
+                """
+                Predict the next position of a ship using its movement history.
+                If the ship has at least two recorded positions, project the next coordinate;
+                otherwise, return its current coordinates.
+                """
+                if len(ship.track) >= 2:
+                    dx = ship.track[-1][0] - ship.track[-2][0]
+                    dy = ship.track[-1][1] - ship.track[-2][1]
+                    return (ship.coordinates[0] + dx, ship.coordinates[1] + dy)
+                return ship.coordinates
+
+            # Determine enemy positions based on forward_shooting flag.
+            if forward_shooting:
+                enemy_positions = [predict_ship_position(ship) for ship in state.opp_fleet]
+            else:
+                enemy_positions = [ship.coordinates for ship in state.opp_fleet]
+
+            # Calculate counts for the target tile.
+            target_enemy_count = sum(1 for pos in enemy_positions if pos == target_coords)
+            target_ally_count = sum(1 for pos in allied_positions if pos == target_coords)
+
+            score -= base_cost
+
+            reward_mult = (1 + int(target_node.reward))
+            score += target_enemy_count * base_cost * reward_mult
+
+            # Penalize for any allied ships hit on the target.
+            score -= target_ally_count * base_cost * reward_mult
+
+            # Evaluate the 8 adjacent (splash) tiles.
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    # Skip the target tile itself.
+                    if dx == 0 and dy == 0:
+                        continue
+
+                    adj_x = target_coords[0] + dx
+                    adj_y = target_coords[1] + dy
+
+                    # Check if within game boundaries.
+                    if 0 <= adj_x < SPACE_SIZE and 0 <= adj_y < SPACE_SIZE:
+                        # Get the node at the splash tile.
+                        splash_node = state.space.get_node(adj_x, adj_y)
+                        # If the node is a reward node, use its reward value; otherwise, multiplier is 1.
+                        splash_multiplier = 1 + int(splash_node.reward)
+
+                        adj_coord = (adj_x, adj_y)
+                        enemy_count = sum(1 for pos in enemy_positions if pos == adj_coord)
+                        ally_count = sum(1 for pos in allied_positions if pos == adj_coord)
+                        score += (enemy_count - ally_count) * splash_cost * splash_multiplier
+
+            return score
+
+
+        for ship in state.fleet:
+            if ship.energy >= state.config.UNIT_SAP_COST:
+                if (ship.task == 'harvest' and ship.action == ActionType.center) or (ship.task != 'harvest'):
+                    valid_nodes = filter(lambda node: ship.can_sap(node, state.config), state.space)
+                    max_node = max(valid_nodes, key=get_sap_score)
+                    max_score = get_sap_score(max_node)
+                    if max_score > 0:
+                        ship.action = ActionType.sap
+                        ship.action_sap_info = (
+                        max_node.coordinates[0] - ship.coordinates[0], max_node.coordinates[1] - ship.coordinates[1])

@@ -1,4 +1,5 @@
 from enum import IntEnum
+from collections import Counter
 
 
 # Game related constants:
@@ -20,12 +21,15 @@ HIDDEN_NODE_ENERGY = 0
 class Config:
     def __init__(self):
         # We will find the exact value of these constants during the game
-        self.UNIT_MOVE_COST = 1  # OPTIONS: list(range(1, 6))
-        self.UNIT_SAP_COST = 30  # OPTIONS: list(range(30, 51))
+        self.UNIT_MOVE_COST = 3  # OPTIONS: list(range(1, 6))
+        self.UNIT_SAP_COST = int((50 + 30) / 2)  # OPTIONS: list(range(30, 51))
         self.UNIT_SAP_RANGE = 3  # OPTIONS: list(range(3, 8))
         self.UNIT_SENSOR_RANGE = 2  # OPTIONS: [1, 2, 3, 4]
         self.OBSTACLE_MOVEMENT_PERIOD = 20  # OPTIONS: 6.67, 10, 20, 40
+        self.ENERGY_NODE_MOVEMENT_PERIOD = 20  # OPTIONS: 100, 50, 33.3, 25, 20
         self.OBSTACLE_MOVEMENT_DIRECTION = (0, 0)  # OPTIONS: [(1, -1), (-1, 1)]
+        self.NEBULA_ENERGY_REDUCTION_SAMPLES = Counter()
+        self.UNIT_SAP_DROPOFF_FACTOR = (0.25 + 0.5 + 1) / 3
 
         # We will NOT find the exact value of these constants during the game
         self.NEBULA_ENERGY_REDUCTION = 5  # OPTIONS: [0, 1, 2, 3, 5, 25]
@@ -37,6 +41,7 @@ class Config:
         self.OBSTACLE_MOVEMENT_PERIOD_FOUND = False
         self.OBSTACLE_MOVEMENT_DIRECTION_FOUND = False
         self.NEBULA_ENERGY_REDUCTION_FOUND = False
+        self.ENERGY_NODE_MOVEMENT_PERIOD_FOUND = False
 
         # Game logs:
 
@@ -46,6 +51,7 @@ class Config:
         # - "points": The number of points scored at that location.
         # This data will help identify which nodes yield points.
         self.REWARD_RESULTS = []
+        self.ENERGY_NODES_MOVEMENT_STATUS = []
 
         # obstacles_movement_status: list of bool
         # A history log of obstacle (asteroids and nebulae) movement events.
