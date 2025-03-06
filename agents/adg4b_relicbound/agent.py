@@ -12,6 +12,7 @@ from base import (
     warp_point,
     get_opposite,
     is_team_sector,
+    get_match_number,
 )
 from debug import show_map, show_energy_field, show_exploration_map
 from pathfinding import (
@@ -36,7 +37,7 @@ class Node:
         self._relic = False
         self._reward = False
         self._explored_for_relic = False
-        self._explored_for_reward = False
+        self._explored_for_reward = True
 
     def __repr__(self):
         return f"Node({self.x}, {self.y}, {self.type})"
@@ -63,22 +64,30 @@ class Node:
     def explored_for_reward(self):
         return self._explored_for_reward
 
-    def update_relic_status(self, status: bool):
-        if self._explored_for_relic and self._relic != status:
+    def update_relic_status(self, status: None | bool):
+        if self._explored_for_relic and self._relic and not status:
             raise ValueError(
                 f"Can't change the relic status {self._relic}->{status} for {self}"
                 ", the tile has already been explored"
             )
 
+        if status is None:
+            self._explored_for_relic = False
+            return
+
         self._relic = status
         self._explored_for_relic = True
 
-    def update_reward_status(self, status: bool):
-        if self._explored_for_reward and self._reward != status:
+    def update_reward_status(self, status: None | bool):
+        if self._explored_for_reward and self._reward and not status:
             raise ValueError(
                 f"Can't change the reward status {self._reward}->{status} for {self}"
                 ", the tile has already been explored"
             )
+
+        if status is None:
+            self._explored_for_reward = False
+            return
 
         self._reward = status
         self._explored_for_reward = True
@@ -133,14 +142,16 @@ class Space:
     def update(self, step, obs, team_id, team_reward):
         self.move_obstacles(step)
         self._update_map(obs)
-        self._update_relic_map(obs, team_id, team_reward)
+        self._update_relic_map(step, obs, team_id, team_reward)
 
-    def _update_relic_map(self, obs, team_id, team_reward):
-        for relic_id, (mask, xy) in enumerate(
-            zip(obs["relic_nodes_mask"], obs["relic_nodes"])
-        ):
-            if mask:
+    def _update_relic_map(self, step, obs, team_id, team_reward):
+        for mask, xy in zip(obs["relic_nodes_mask"], obs["relic_nodes"]):
+            if mask and not self.get_node(*xy).relic:
+                # We have found a new relic.
                 self._update_relic_status(*xy, status=True)
+                for x, y in nearby_positions(*xy, Global.RELIC_REWARD_RANGE):
+                    if not self.get_node(x, y).reward:
+                        self._update_reward_status(x, y, status=None)
 
         all_relics_found = True
         all_rewards_found = True
@@ -157,8 +168,12 @@ class Space:
         Global.ALL_RELICS_FOUND = all_relics_found
         Global.ALL_REWARDS_FOUND = all_rewards_found
 
+        match = get_match_number(step)
+        match_step = get_match_step(step)
+        num_relics_th = 2 * min(match, Global.LAST_MATCH_WHEN_RELIC_CAN_APPEAR) + 1
+
         if not Global.ALL_RELICS_FOUND:
-            if len(self._relic_nodes) == Global.MAX_RELIC_NODES:
+            if len(self._relic_nodes) >= num_relics_th:
                 # all relics found, mark all nodes as explored for relics
                 Global.ALL_RELICS_FOUND = True
                 for node in self:
@@ -166,9 +181,13 @@ class Space:
                         self._update_relic_status(*node.coordinates, status=False)
 
         if not Global.ALL_REWARDS_FOUND:
-            self._update_reward_status_from_relics_distribution()
-            self._update_reward_results(obs, team_id, team_reward)
-            self._update_reward_status_from_reward_results()
+            if (
+                match_step > Global.LAST_MATCH_STEP_WHEN_RELIC_CAN_APPEAR
+                or len(self._relic_nodes) >= num_relics_th
+            ):
+                self._update_reward_status_from_relics_distribution()
+                self._update_reward_results(obs, team_id, team_reward)
+                self._update_reward_status_from_reward_results()
 
     def _update_reward_status_from_reward_results(self):
         # We will use Global.REWARD_RESULTS to identify which nodes yield points
@@ -203,12 +222,9 @@ class Space:
                     self._update_reward_status(*node.coordinates, status=True)
 
             elif reward > len(unknown_nodes):
-                # we shouldn't be here
-                print(
-                    f"Something wrong with reward result: {result}"
-                    ", this result will be ignored.",
-                    file=stderr,
-                )
+                # We shouldn't be here, but sometimes we are. It's not good.
+                # Maybe I'll fix it later.
+                pass
 
     def _update_reward_results(self, obs, team_id, team_reward):
         ship_nodes = set()
@@ -248,7 +264,7 @@ class Space:
                 # no relics in range RELIC_REWARD_RANGE
                 node.update_reward_status(False)
 
-    def _update_relic_status(self, x, y, status=True):
+    def _update_relic_status(self, x, y, status):
         node = self.get_node(x, y)
         node.update_relic_status(status)
 
@@ -299,13 +315,9 @@ class Space:
 
         Global.OBSTACLES_MOVEMENT_STATUS.append(obstacles_shifted)
 
-        if not Global.OBSTACLE_MOVEMENT_PERIOD_FOUND:
-            period = self._find_obstacle_movement_period(
-                Global.OBSTACLES_MOVEMENT_STATUS
-            )
-            if period is not None:
-                Global.OBSTACLE_MOVEMENT_PERIOD_FOUND = True
-                Global.OBSTACLE_MOVEMENT_PERIOD = period
+        def clear_map_info():
+            for n in self:
+                n.type = NodeType.unknown
 
         if not Global.OBSTACLE_MOVEMENT_DIRECTION_FOUND and obstacles_shifted:
             direction = self._find_obstacle_movement_direction(obs)
@@ -315,9 +327,26 @@ class Space:
 
                 self.move(*Global.OBSTACLE_MOVEMENT_DIRECTION, inplace=True)
             else:
-                # Can't find OBSTACLE_MOVEMENT_DIRECTION
-                for node in self:
-                    node.type = NodeType.unknown
+                clear_map_info()
+
+        if not Global.OBSTACLE_MOVEMENT_PERIOD_FOUND:
+            period = self._find_obstacle_movement_period(
+                Global.OBSTACLES_MOVEMENT_STATUS
+            )
+            if period is not None:
+                Global.OBSTACLE_MOVEMENT_PERIOD_FOUND = True
+                Global.OBSTACLE_MOVEMENT_PERIOD = period
+
+            if obstacles_shifted:
+                clear_map_info()
+
+        if (
+            obstacles_shifted
+            and Global.OBSTACLE_MOVEMENT_PERIOD_FOUND
+            and Global.OBSTACLE_MOVEMENT_DIRECTION_FOUND
+        ):
+            # maybe something is wrong
+            clear_map_info()
 
         for node in self:
             x, y = node.coordinates
@@ -345,9 +374,19 @@ class Space:
 
     @staticmethod
     def _find_obstacle_movement_period(obstacles_movement_status):
-        # Right now there are only two options for nebula_tile_drift_speed: 1 / 20 and 1 / 40
-        if obstacles_movement_status and obstacles_movement_status[-1]:
-            return 20 if len(obstacles_movement_status) - 21 % 40 < 20 else 40
+        if len(obstacles_movement_status) < 81:
+            return
+
+        num_movements = sum(obstacles_movement_status)
+
+        if num_movements <= 2:
+            return 40
+        elif num_movements <= 4:
+            return 20
+        elif num_movements <= 8:
+            return 10
+        else:
+            return 20 / 3
 
     def _find_obstacle_movement_direction(self, obs):
         sensor_mask = obs["sensor_mask"]
@@ -383,9 +422,10 @@ class Space:
             Global.OBSTACLE_MOVEMENT_PERIOD_FOUND
             and Global.OBSTACLE_MOVEMENT_DIRECTION_FOUND
             and Global.OBSTACLE_MOVEMENT_PERIOD > 0
-            and (step - 1) % Global.OBSTACLE_MOVEMENT_PERIOD == 0
         ):
-            self.move(*Global.OBSTACLE_MOVEMENT_DIRECTION, inplace=True)
+            speed = 1 / Global.OBSTACLE_MOVEMENT_PERIOD
+            if (step - 2) * speed % 1 > (step - 1) * speed % 1:
+                self.move(*Global.OBSTACLE_MOVEMENT_DIRECTION, inplace=True)
 
     def move(self, dx: int, dy: int, *, inplace=False) -> "Space":
         if not inplace:
@@ -400,6 +440,14 @@ class Space:
                 x, y = warp_point(node.x + dx, node.y + dy)
                 self.get_node(x, y).type = node_type
             return self
+
+    def clear_exploration_info(self):
+        Global.REWARD_RESULTS = []
+        Global.ALL_RELICS_FOUND = False
+        Global.ALL_REWARDS_FOUND = False
+        for node in self:
+            if not node.relic:
+                self._update_relic_status(node.x, node.y, status=None)
 
 
 class Ship:
@@ -486,8 +534,9 @@ class Agent:
 
     def act(self, step: int, obs, remainingOverageTime: int = 60):
         match_step = get_match_step(step)
+        match_number = get_match_number(step)
 
-        # print(f"start step={match_step}({step})", file=stderr)
+        # print(f"start step={match_step}({step}, {match_number})", file=stderr)
 
         if match_step == 0:
             # nothing to do here at the beginning of the match
@@ -496,6 +545,8 @@ class Agent:
             self.opp_fleet.clear()
             self.space.clear()
             self.space.move_obstacles(step)
+            if match_number <= Global.LAST_MATCH_WHEN_RELIC_CAN_APPEAR:
+                self.space.clear_exploration_info()
             return self.create_actions_array()
 
         points = int(obs["team_points"][self.team_id])
@@ -507,7 +558,7 @@ class Agent:
         self.fleet.update(obs, self.space)
         self.opp_fleet.update(obs, self.space)
 
-        # self.show_visible_map()
+        # self.show_explored_map()
 
         self.find_relics()
         self.find_rewards()

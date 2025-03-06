@@ -11,17 +11,19 @@ class Global:
     MAX_STEPS_IN_MATCH = 100
     MAX_ENERGY_PER_TILE = 20
     MAX_RELIC_NODES = 6
+    LAST_MATCH_STEP_WHEN_RELIC_CAN_APPEAR = 50
+    LAST_MATCH_WHEN_RELIC_CAN_APPEAR = 2
 
     # We will find the exact value of these constants during the game
     UNIT_MOVE_COST = 1  # OPTIONS: list(range(1, 6))
     UNIT_SAP_COST = 30  # OPTIONS: list(range(30, 51))
     UNIT_SAP_RANGE = 3  # OPTIONS: list(range(3, 8))
-    UNIT_SENSOR_RANGE = 2  # OPTIONS: list(range(2, 5))
-    OBSTACLE_MOVEMENT_PERIOD = 20  # OPTIONS: 20, 40
+    UNIT_SENSOR_RANGE = 2  # OPTIONS: [1, 2, 3, 4]
+    OBSTACLE_MOVEMENT_PERIOD = 20  # OPTIONS: 6.67, 10, 20, 40
     OBSTACLE_MOVEMENT_DIRECTION = (0, 0)  # OPTIONS: [(1, -1), (-1, 1)]
 
     # We will NOT find the exact value of these constants during the game
-    NEBULA_ENERGY_REDUCTION = 10  # OPTIONS: [0, 10, 25]
+    NEBULA_ENERGY_REDUCTION = 5  # OPTIONS: [0, 1, 2, 3, 5, 25]
 
     # Exploration flags:
 
@@ -114,6 +116,10 @@ class ActionType(IntEnum):
 
 def get_match_step(step: int) -> int:
     return step % (Global.MAX_STEPS_IN_MATCH + 1)
+
+
+def get_match_number(step: int) -> int:
+    return step // (Global.MAX_STEPS_IN_MATCH + 1)
 
 
 def warp_int(x):
