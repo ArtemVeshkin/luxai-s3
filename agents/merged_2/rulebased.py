@@ -39,7 +39,6 @@ class Rulebased:
         self.find_relics(state)
         self.find_rewards(state)
         self.harvest(state)
-        # self.fight(state)
         self.destroy(state)
         self.estimate_nebula_energy(state)
         self.build_barrier(state)
@@ -599,44 +598,6 @@ class Rulebased:
                         if len(actions) == 2:
                             cur_harvesting_ship.action = actions[1]
                             cur_harvesting_ship.target, ship.target = ship.target, cur_harvesting_ship.target
-
-                        
-
-
-    def fight(self, state: State):
-        def find_best_target(ship, targets):
-            #todo: optimizirovat!!!!! schitat cherez dp
-            if state.game_num == 0 and random.random() < 0.7:
-                return None
-            best_target = None
-            max_opp_ship_count = 0
-            for x, y in nearby_positions(*ship.coordinates, state.config.UNIT_SAP_RANGE):
-                opp_ship_count = 0
-                for dx in range(-1, 2):
-                    for dy in range(-1, 2):
-                        if (x + dx, y + dy) in targets:
-                            opp_ship_count += 1 if dx == 0 and dy == 0 else 0.25 #todo: pomenyat'!!!!
-                if opp_ship_count > max_opp_ship_count and manhattan_distance(ship.coordinates, (x, y)) <= state.config.UNIT_SAP_RANGE:
-                    max_opp_ship_count = opp_ship_count
-                    best_target = (x, y)
-            if max_opp_ship_count <= 1.5 and random.random() < 0.5:
-                return None
-            return best_target
-
-        targets = {opp_ship.coordinates for opp_ship in state.opp_fleet}
-        for x, y in targets:
-            for ship in state.fleet:
-                if manhattan_distance((x, y), ship.coordinates) <= state.config.UNIT_SAP_RANGE:
-                    for relic_node in state.space.relic_nodes:
-                        if manhattan_distance((x, y), relic_node.coordinates) <= RELIC_REWARD_RANGE\
-                                or manhattan_distance(ship.coordinates, relic_node.coordinates) <= RELIC_REWARD_RANGE: #todo: mb ubrat' eto uslovie
-                            if ship.node.energy\
-                                    and ship.energy + (ship.node.energy * 2 if ship.node.energy < 0 else 0) > state.config.UNIT_SAP_COST:
-                                best_target = find_best_target(ship, targets)
-                                if best_target:
-                                    ship.sap_direction = (best_target[0] - ship.node.x, best_target[1] - ship.node.y)
-                                    ship.action = ActionType.sap
-                                    break
 
 
     def destroy(self, state: State):
