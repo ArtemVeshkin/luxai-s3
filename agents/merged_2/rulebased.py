@@ -307,7 +307,6 @@ class Rulebased:
                 node = state.space.get_node(x, y)
                 if not node.explored_for_reward and node.is_walkable:
                     targets.append((x, y))
-
             target, _ = find_closest_target(ship.coordinates, targets)
 
             if target == ship.coordinates and not can_pause:
@@ -327,6 +326,7 @@ class Rulebased:
                 ship.task = "find_reward"
                 ship.target = state.space.get_node(*target)
                 ship.action == ActionType.center
+                return True
             else:
                 path = astar(create_weights(
                     state.space,
@@ -343,6 +343,7 @@ class Rulebased:
                     ship.task = "find_rewards"
                     ship.target = state.space.get_node(*target)
                     ship.action = actions[0]
+                    return True
 
         can_pause = True
         for n, s in sorted(
