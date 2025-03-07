@@ -173,8 +173,6 @@ class Rulebased:
         barrier_coords = set(self.get_barrier_coords(state))
         barrier_to_n_ships = defaultdict(int)
         for ship in state.fleet:
-            if state.step == 40:
-                print(f'node={ship.node}; task={ship.task}; action={ship.action}', file=stderr)
             if ship.task is not None or ship.target is not None:
                 continue
             target, _ = find_closest_target(ship.coordinates, barrier_coords)
@@ -196,8 +194,6 @@ class Rulebased:
                     barrier_coords.remove(target)
             if actions:
                 ship.action = actions[0]
-            if state.step == 40:
-                print(f'node={ship.node}; action={ship.action}', file=stderr)
 
 
     def find_relics(self, state: State):
