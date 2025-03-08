@@ -20,7 +20,6 @@ class Node:
         self.y = y
         self.type = NodeType.unknown
         self.energy = None
-        self.predicted_energy = None
         self.is_visible = False
         self.visited_times = 0
         self.is_enemy = False
