@@ -104,11 +104,11 @@ def create_weights(space, all_rewards_found, nebula_energy_reduction, coords=Non
         elif not node.is_walkable:
             weight = -1
         else:
-            node_energy = node.predicted_energy
+            node_energy = node.energy
             if node_energy is None:
                 node_energy = HIDDEN_NODE_ENERGY
     
-            node_energy = node.predicted_energy if node.predicted_energy is not None else HIDDEN_NODE_ENERGY
+            node_energy = node.energy if node.energy is not None else HIDDEN_NODE_ENERGY
             if distance is not None and energy_update_in is not None and distance > energy_update_in:
                 node_energy = HIDDEN_NODE_ENERGY
 
@@ -142,8 +142,8 @@ def estimate_energy_cost(space, path, nebula_energy_reduction, unit_move_cost):
     last_position = path[0]
     for x, y in path[1:]:
         node = space.get_node(x, y)
-        if node.predicted_energy is not None:
-            energy -= node.predicted_energy
+        if node.energy is not None:
+            energy -= node.energy
         else:
             energy -= HIDDEN_NODE_ENERGY
 

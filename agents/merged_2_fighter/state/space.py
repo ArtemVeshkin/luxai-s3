@@ -26,7 +26,7 @@ def nearby_positions(x, y, distance):
 
 class Space:
     def __init__(self):
-        self.energy_predictor = EnergyPredictor()
+        # self.energy_predictor = EnergyPredictor()
 
         self._nodes: list[list[Node]] = []
         for y in range(SPACE_SIZE):
@@ -73,7 +73,7 @@ class Space:
         self.move_obstacles(step, config)
         self._update_map(obs, config, team_id)
         self._update_relic_map(step, obs, team_id, team_reward, config)
-        self.energy_predictor.predict_hidden_energy(self)
+        # self.energy_predictor.predict_hidden_energy(self)
 
 
     def _update_relic_map(self, step, obs, team_id, team_reward, config: Config):
@@ -299,7 +299,7 @@ class Space:
         # The energy field has changed
         # I cannot predict what the new energy field will be like.
         if energy_nodes_shifted:
-            self.energy_predictor.update_prev_energy_fields(self)
+            # self.energy_predictor.update_prev_energy_fields(self)
 
             for node in self:
                 node.energy = None
