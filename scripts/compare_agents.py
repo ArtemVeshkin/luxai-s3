@@ -17,6 +17,7 @@ import subprocess
 import json
 import tabulate
 from scipy.stats import mannwhitneyu
+from scipy.stats import binomtest, beta
 
 
 @dataclass
@@ -77,8 +78,20 @@ def run_matches(n_runs, agent1_name, agent2_name, SCRIPT_DIR, max_workers=4):
         for future in tqdm(as_completed(futures), total=n_runs):
             total_wins += future.result()
             completed_matches += 1
-            print(f'Cur winrate = {100 * total_wins / completed_matches:.1f}%')
 
+            # Winrate
+            winrate = total_wins / completed_matches
+
+            # 95% Confidence Interval (Clopper-Pearson)
+            ci_lower, ci_upper = beta.ppf([0.025, 0.975], total_wins + 1, completed_matches - total_wins + 1)
+
+            # Binomial test p-value (two-sided test vs. 0.5 baseline)
+            p_value = binomtest(total_wins, completed_matches, p=0.5, alternative='two-sided').pvalue
+
+            # Print results
+            print(f'Winrate: {100 * winrate:.1f}% | '
+                  f'95% CI: [{100 * ci_lower:.1f}%, {100 * ci_upper:.1f}%] | '
+                  f'p-value: {p_value:.4f}')
     return total_wins
 
 

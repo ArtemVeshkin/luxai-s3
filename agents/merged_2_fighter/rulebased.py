@@ -1,4 +1,3 @@
-from email.header import SPACE
 from scipy.signal import convolve2d
 
 from state.state import State
@@ -620,23 +619,6 @@ class Rulebased:
                 return (ship.coordinates[0] + dx, ship.coordinates[1] + dy)
             return ship.coordinates
 
-        def get_ship_positions(forward_shooting=True):
-            """Get predicted or current positions for enemy ships."""
-            positions, predictions, energies = [], [], []
-            for ship in state.opp_fleet:
-                if forward_shooting and ship.energy > state.config.UNIT_MOVE_COST and ship.coordinates not in reward_nodes_pos:
-                    positions.append(predict_ship_position(ship))
-                    predictions.append(True)
-                else:
-                    positions.append(ship.coordinates)
-                    predictions.append(False)
-
-            return positions, predictions
-
-        import numpy as np
-
-        SPACE_SIZE = 24
-
         def get_energy_matrices(state, reward_nodes_pos):
             predicted_energy_matrix = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=int)
             current_energy_matrix = np.zeros((SPACE_SIZE, SPACE_SIZE), dtype=int)
@@ -658,25 +640,6 @@ class Rulebased:
                 current_allied_energy_matrix[current_x, current_y] += ship.energy
 
             return predicted_energy_matrix, current_energy_matrix, current_allied_energy_matrix
-
-        def calculate_sap_score(target_node: Node):
-            """Calculate the SAP action score for a target node."""
-            cfg = state.config
-            base_cost = cfg.UNIT_SAP_COST
-            splash_cost = base_cost * cfg.UNIT_SAP_DROPOFF_FACTOR
-            score = -base_cost
-
-            target_coords = target_node.coordinates
-
-            for dx in [-1, 0, 1]:
-                for dy in [-1, 0, 1]:
-                    adj_x, adj_y = target_coords[0] + dx, target_coords[1] + dy
-
-                    if 0 <= adj_x < SPACE_SIZE and 0 <= adj_y < SPACE_SIZE:
-                        current_cost = base_cost if (dx == 0 and dy == 0) else splash_cost
-                        score += calculate_reward(adj_x, adj_y, current_cost)
-
-            return score
 
         def filter_ships(state):
             for ship in state.fleet:
