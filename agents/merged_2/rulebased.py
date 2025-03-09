@@ -627,7 +627,7 @@ class Rulebased:
             target_coords = target_node.coordinates
 
             # Gather allied positions from our fleet.
-            allied_positions = [ship.coordinates for ship in state.fleet]
+            allied_positions = [ship.next_coords() if ship.action else ship.coordinates for ship in state.fleet]
 
             def predict_ship_position(ship):
                 """

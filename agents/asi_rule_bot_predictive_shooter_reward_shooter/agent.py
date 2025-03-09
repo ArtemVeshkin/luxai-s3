@@ -595,6 +595,9 @@ class Agent:
         self.opp_team_id = 1 if self.team_id == 0 else 0
         self.env_cfg = env_cfg
 
+        self.my_spawn_coord = (0, 0) if self.player == "player_0" else (24, 24)
+        self.opp_spawn_coord = (0, 0) if self.player == "player_1" else (24, 24)
+
         Global.MAX_UNITS = env_cfg["max_units"]
         Global.UNIT_MOVE_COST = env_cfg["unit_move_cost"]
         Global.UNIT_SAP_COST = env_cfg["unit_sap_cost"]
@@ -946,7 +949,7 @@ class Agent:
                         ship.action_sap_info = (
                         max_node.coordinates[0] - ship.coordinates[0], max_node.coordinates[1] - ship.coordinates[1])
 
-    def get_sap_score(self, target_node, forward_shooting=False):
+    def get_sap_score(self, target_node, forward_shooting=True):
         """
         Compute a score for a sap action on the target_node based on the following rules:
 
@@ -969,7 +972,9 @@ class Agent:
         splash_cost = Global.UNIT_SAP_COST * Global.UNIT_SAP_DROPOFF_FACTOR
         score = 0
         target_coords = target_node.coordinates
-
+        # my_way_length = manhattan_distance(target_coords, self.my_spawn_coord)
+        # opp_way_length = manhattan_distance(target_coords, self.opp_spawn_coord)
+        # norm = manhattan_distance(self.opp_spawn_coord, self.my_spawn_coord)
         # Gather allied positions from our fleet.
         allied_positions = [ship.coordinates for ship in self.fleet]
 
