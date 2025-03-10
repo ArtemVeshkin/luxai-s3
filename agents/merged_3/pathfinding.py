@@ -113,7 +113,7 @@ def create_weights(space, all_rewards_found, nebula_energy_reduction, coords=Non
                 node_energy = HIDDEN_NODE_ENERGY
 
             # pathfinding can't deal with negative weight
-            weight = MAX_ENERGY_PER_TILE + 1 - node_energy + (1 if node.visited_times > 0 and not all_rewards_found else 0)
+            weight = MAX_ENERGY_PER_TILE + 1 - node_energy + (1 if node.visited_times > 0 and not all_rewards_found else 0) + (0 if node.reward else 3)
             #todo: uchest' uvelichenie seen nodes
 
         if node.type == NodeType.nebula:
