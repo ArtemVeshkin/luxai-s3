@@ -417,9 +417,14 @@ class Rulebased:
                 return True
 
             path = astar(
-                create_weights(state.space, state.config.ALL_REWARDS_FOUND, state.config.NEBULA_ENERGY_REDUCTION),
-                start=ship.coordinates,
-                goal=target_node.coordinates,
+                create_weights(
+                    state.space,
+                    state.config.ALL_REWARDS_FOUND,
+                    state.config.NEBULA_ENERGY_REDUCTION,
+                    ship.coordinates,
+                    max_dist=MAX_STEPS_IN_MATCH + 1 - state.match_step,
+                    energy_update_in=state.match_step % state.config.ENERGY_NODE_MOVEMENT_PERIOD + 1
+                ), start=ship.coordinates, goal=target_node.coordinates,
             )
             energy = estimate_energy_cost(state.space, path, state.config.NEBULA_ENERGY_REDUCTION, state.config.UNIT_MOVE_COST)
             actions = path_to_actions(path)
